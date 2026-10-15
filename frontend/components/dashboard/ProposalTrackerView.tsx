@@ -208,8 +208,18 @@ export default function ProposalTrackerView({
 
     allProposals.forEach(row => {
       const colId = getProposalColumnId(row);
-      const rawVal = String(row[valueCol] || "").split("(")[0].replace(/[^0-9.-]/g, "");
-      const numVal = parseFloat(rawVal) || 0;
+      const baseStr = String(row[valueCol] || "").split("(")[0].trim();
+      let numVal = 0;
+      if (baseStr.includes("+")) {
+        numVal = baseStr.split("+").reduce((acc, part) => {
+          const clean = part.replace(/[^0-9.-]/g, "").trim();
+          const n = parseFloat(clean);
+          return acc + (isNaN(n) ? 0 : n);
+        }, 0);
+      } else {
+        const clean = baseStr.replace(/[^0-9.-]/g, "").trim();
+        numVal = parseFloat(clean) || 0;
+      }
 
       totalPipelineValue += numVal;
       totalSentCount++;

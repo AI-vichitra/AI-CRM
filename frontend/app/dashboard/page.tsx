@@ -478,12 +478,23 @@ function DashboardContent() {
       });
 
       if (valCol) {
-        const valStr = String(row[valCol] || "").replace(/[$,₹\s]/g, "").replace(/,/g, "").trim();
-        const parsed = parseFloat(valStr);
-        if (!isNaN(parsed)) {
-          if (!isWonOrLost) {
-            totalValue += parsed;
+        const rawVal = row[valCol];
+        let parsed = 0;
+        if (rawVal) {
+          const baseStr = String(rawVal).split("(")[0].trim();
+          if (baseStr.includes("+")) {
+            parsed = baseStr.split("+").reduce((acc, part) => {
+              const clean = part.replace(/[^0-9.-]/g, "").trim();
+              const num = parseFloat(clean);
+              return acc + (isNaN(num) ? 0 : num);
+            }, 0);
+          } else {
+            const clean = baseStr.replace(/[^0-9.-]/g, "").trim();
+            parsed = parseFloat(clean) || 0;
           }
+        }
+        if (parsed > 0 && !isWonOrLost) {
+          totalValue += parsed;
         }
       }
       if (companyCol) {

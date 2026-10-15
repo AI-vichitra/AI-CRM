@@ -157,8 +157,19 @@ def parse_num(val: Any) -> float:
     if not val:
         return 0.0
     clean_val = str(val).split("(")[0].replace(",", "").replace("₹", "").replace("$", "").strip()
+    if "+" in clean_val:
+        total = 0.0
+        for part in clean_val.split("+"):
+            p_clean = re.sub(r'[^0-9.-]', '', part).strip()
+            try:
+                if p_clean:
+                    total += float(p_clean)
+            except Exception:
+                pass
+        return total
+    clean = re.sub(r'[^0-9.-]', '', clean_val).strip()
     try:
-        return float(clean_val)
+        return float(clean) if clean else 0.0
     except Exception:
         return 0.0
 

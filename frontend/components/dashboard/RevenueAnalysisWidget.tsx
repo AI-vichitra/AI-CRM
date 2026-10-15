@@ -85,18 +85,37 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
   const monthlyDataMap: Record<string, { won: number; lost: number }> = {};
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  const parseRevenueValue = (raw: any): number => {
+    if (raw === undefined || raw === null) return 0;
+    const str = String(raw).trim();
+    if (!str || str === "—" || str === "-") return 0;
+
+    // Handles expressions like "10,00,000 + 27,00,000 (4,50,000 X 6)"
+    // or "21,00,000 (12,00,000 + 9,00,000)"
+    const basePart = str.split("(")[0].trim();
+    if (basePart.includes("+")) {
+      return basePart.split("+").reduce((acc, part) => {
+        const clean = part.replace(/[^0-9.-]/g, "").trim();
+        const num = parseFloat(clean);
+        return acc + (isNaN(num) ? 0 : num);
+      }, 0);
+    }
+
+    const clean = basePart.replace(/[^0-9.-]/g, "").trim();
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : num;
+  };
+
   if (!isMock && sheetData.rows) {
     sheetData.rows.forEach(row => {
       let revVal = 0;
       if (revenueHeader && row[revenueHeader] !== undefined && row[revenueHeader] !== "") {
-        const revStr = String(row[revenueHeader]).split("(")[0];
-        revVal = parseFloat(revStr.replace(/[^0-9.-]/g, "")) || 0;
+        revVal = parseRevenueValue(row[revenueHeader]);
       } else {
         for (const [k, v] of Object.entries(row)) {
           const kl = k.toLowerCase();
           if (kl.includes("revenue") || kl.includes("estimation") || kl.includes("value") || kl.includes("amount")) {
-            const revStr = String(v || "").split("(")[0];
-            revVal = parseFloat(revStr.replace(/[^0-9.-]/g, "")) || 0;
+            revVal = parseRevenueValue(v);
             if (revVal > 0) break;
           }
         }
@@ -104,14 +123,21 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
       
       totalEstimatedRevenue += revVal;
 
-      // Safely resolve status value across potential duplicate 'Status' headers
+      // Safely resolve status value across Status and Lead columns
       let statusVal = "";
-      for (const key of Object.keys(row)) {
-        if (key.toLowerCase().includes("status")) {
-          const val = String(row[key] || "").toLowerCase().trim();
-          if (["hot", "warm", "cold", "discovery", "dead"].includes(val)) {
-            statusVal = val;
-            break;
+      if (row["Status"] && String(row["Status"]).trim()) {
+        statusVal = String(row["Status"]).toLowerCase().trim();
+      } else if (row["Lead"] && String(row["Lead"]).trim()) {
+        statusVal = String(row["Lead"]).toLowerCase().trim();
+      } else {
+        for (const key of Object.keys(row)) {
+          const kl = key.toLowerCase();
+          if (kl === "status" || kl === "lead") {
+            const val = String(row[key] || "").toLowerCase().trim();
+            if (["hot", "warm", "cold", "discovery", "won", "dead"].includes(val)) {
+              statusVal = val;
+              break;
+            }
           }
         }
       }
@@ -119,7 +145,7 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
         statusVal = String(row[statusHeader] || "").toLowerCase().trim();
       }
 
-      const stageVal = String(row[stageHeader] || "").toLowerCase().trim();
+      const stageVal = String(row["Stage"] || row["Lead Status"] || row[stageHeader] || "").toLowerCase().trim();
 
       const isWon = ["won", "closed won", "converted", "completed", "hired", "success"].some(x => statusVal.includes(x) || stageVal.includes(x));
       const isLost = ["lost", "dead", "lost lead", "dead lead", "cold"].some(x => statusVal.includes(x) || stageVal.includes(x));
@@ -222,7 +248,7 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      maximumFractionDigits: 2,
+      maximumFractionDigits: val % 1 === 0 ? 0 : 2,
     }).format(val);
   };
 
