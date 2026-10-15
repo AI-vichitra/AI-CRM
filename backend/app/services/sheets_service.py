@@ -280,9 +280,12 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
         if not values:
             data = {"headers": [], "rows": [], "total": 0, "is_mock": False}
         else:
-            raw_headers = values[0]
-            headers = _deduplicate_headers(raw_headers)
-            headers = [h for h in headers if h != "Lead ID"]
+            raw_headers = [h.strip() for h in values[0]]
+            if len(raw_headers) > 1 and raw_headers[0] == "" and raw_headers[1].lower() == "company":
+                raw_headers[0] = "Date"
+
+            deduped_raw_headers = _deduplicate_headers(raw_headers)
+            headers = [h for h in deduped_raw_headers if h != "Lead ID"]
             
             rows = values[1:]
             normalized = []
@@ -292,11 +295,9 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                 row_dict = {}
                 row_has_data = False
                 
-                for new_idx, h in enumerate(raw_headers):
-                    val = row[new_idx].strip() if new_idx < len(row) else ""
-                    if new_idx < len(headers):
-                        header_key = headers[new_idx]
-                        row_dict[header_key] = val
+                for col_idx, col_header in enumerate(deduped_raw_headers):
+                    val = row[col_idx].strip() if col_idx < len(row) else ""
+                    row_dict[col_header] = val
                     if val != "":
                         row_has_data = True
                 
@@ -327,6 +328,36 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                         row_dict["Stage"] = norm_stg
                         if not row_dict.get("Lead Status"):
                             row_dict["Lead Status"] = norm_stg
+
+                    # Cross-populate core aliases so details and tables always find values
+                    ret_cost = row_dict.get("Retainer cost") or row_dict.get("Retainer Cost") or ""
+                    row_dict["Retainer cost"] = ret_cost
+                    row_dict["Retainer Cost"] = ret_cost
+
+                    rev_est = row_dict.get("Revenue Estimations") or row_dict.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)") or row_dict.get("Revenue Estimation") or ""
+                    row_dict["Revenue Estimations"] = rev_est
+                    row_dict["Revenue Estimation (In INR) (Oct 26 - Mar 27)"] = rev_est
+
+                    poc_name = row_dict.get("Name") or row_dict.get("POC Name") or ""
+                    row_dict["Name"] = poc_name
+                    row_dict["POC Name"] = poc_name
+
+                    phone_val = row_dict.get("Phone") or row_dict.get("Contact No.") or ""
+                    row_dict["Phone"] = phone_val
+                    row_dict["Contact No."] = phone_val
+
+                    email_val = row_dict.get("Email") or row_dict.get("Email Id") or ""
+                    row_dict["Email"] = email_val
+                    row_dict["Email Id"] = email_val
+
+                    source_val = row_dict.get("Source") or row_dict.get("Lead Source") or ""
+                    row_dict["Source"] = source_val
+                    row_dict["Lead Source"] = source_val
+
+                    # If Date column is at index 0 or unnamed
+                    date_val = row_dict.get("Date") or row_dict.get("Date (1)") or row_dict.get("Unnamed") or ""
+                    row_dict["Date"] = date_val
+
                     normalized.append(row_dict)
 
             # 4. If fetching Active Leads, also seamlessly integrate 'Active Leads from Sept '
@@ -587,11 +618,15 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
         if not values:
             raise ValueError("Target sheet headers could not be found.")
         headers = [h.strip() for h in values[0]]
+        if len(headers) > 1 and headers[0] == "" and headers[1].lower() == "company":
+            headers[0] = "Date"
         deduped_headers = _deduplicate_headers(headers)
         
         # 2b. Field alias mapping
         alias_map = {
+            "Date": clean_data.get("Date") or clean_data.get("date", ""),
             "Lead Source": clean_data.get("Lead Source") or clean_data.get("Source", ""),
+            "Source": clean_data.get("Source") or clean_data.get("Lead Source", ""),
             "POC Name": clean_data.get("POC Name") or clean_data.get("Name", "") or clean_data.get("Company POC Name", ""),
             "Name": clean_data.get("Name") or clean_data.get("POC Name", "") or clean_data.get("Company POC Name", ""),
             "Contact No.": clean_data.get("Contact No.") or clean_data.get("Phone", "") or clean_data.get("Company POC Phone Number", ""),
@@ -604,13 +639,23 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
             "Revenue Estimations": clean_data.get("Revenue Estimations") or clean_data.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)", ""),
             "Retainer Cost": clean_data.get("Retainer Cost") or clean_data.get("Retainer cost", ""),
             "Retainer cost": clean_data.get("Retainer cost") or clean_data.get("Retainer Cost", ""),
+            "Lead": clean_data.get("Lead") or clean_data.get("Status", ""),
+            "Status": clean_data.get("Status") or clean_data.get("Lead", ""),
+            "Lead Status": clean_data.get("Lead Status") or clean_data.get("Stage", ""),
+            "Stage": clean_data.get("Stage") or clean_data.get("Lead Status", ""),
         }
         for ak, av in alias_map.items():
             if av and not clean_data.get(ak):
                 clean_data[ak] = av
 
         # 2c. Ensure the spreadsheet has any new columns present in clean_data (excluding UI aliases)
-        ui_aliases = {"Company/Brand Name", "Company Name", "Company POC Name", "Company POC Email ID", "Company POC Phone Number", "Cog POC Name"}
+        ui_aliases = {
+            "Company/Brand Name", "Company Name", "Company POC Name", "Company POC Email ID",
+            "Company POC Phone Number", "Cog POC Name", "Date", "POC Name", "Lead Source",
+            "Retainer Cost", "Retainer cost", "Lead Status", "Lead", "Stage", "Status",
+            "Revenue Estimations", "Revenue Estimation (In INR) (Oct 26 - Mar 27)",
+            "Name", "Phone", "Email", "Source", "Contact No.", "Email Id"
+        }
         new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and k not in ui_aliases and k != "Lead ID" and v != ""]
         if new_cols:
             try:
@@ -628,7 +673,10 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
         # 3. Format row data to match header ordering
         row_values = []
         for dh in deduped_headers:
-            row_values.append(str(clean_data.get(dh, "")).strip())
+            val = str(clean_data.get(dh, "")).strip()
+            if (dh == "" or dh.startswith("Unnamed")) and clean_data.get("Date"):
+                val = str(clean_data.get("Date")).strip()
+            row_values.append(val)
             
         # 4. Append to sheet
         body = {
@@ -694,17 +742,29 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
         if not values:
             raise ValueError("Target sheet headers could not be found.")
         headers = [h.strip() for h in values[0]]
+        if len(headers) > 1 and headers[0] == "" and headers[1].lower() == "company":
+            headers[0] = "Date"
         deduped_headers = _deduplicate_headers(headers)
 
-        # Field alias mapping for Sept tab if target is Sept tab
+        # Field alias mapping
         alias_map = {
+            "Date": clean_data.get("Date") or clean_data.get("date", ""),
+            "Company": clean_data.get("Company") or clean_data.get("Company Name", "") or clean_data.get("Company/Brand Name", ""),
+            "Cog POC": clean_data.get("Cog POC") or clean_data.get("Cog POC Name", ""),
             "Lead Source": clean_data.get("Lead Source") or clean_data.get("Source", ""),
-            "POC Name": clean_data.get("POC Name") or clean_data.get("Name", ""),
-            "Contact No.": clean_data.get("Contact No.") or clean_data.get("Phone", ""),
-            "Email Id": clean_data.get("Email Id") or clean_data.get("Email", ""),
-            "Remarks /Updates": clean_data.get("Remarks /Updates") or clean_data.get("Last Update", ""),
+            "Source": clean_data.get("Source") or clean_data.get("Lead Source", ""),
+            "POC Name": clean_data.get("POC Name") or clean_data.get("Name", "") or clean_data.get("Company POC Name", ""),
+            "Name": clean_data.get("Name") or clean_data.get("POC Name", "") or clean_data.get("Company POC Name", ""),
+            "Contact No.": clean_data.get("Contact No.") or clean_data.get("Phone", "") or clean_data.get("Company POC Phone Number", ""),
+            "Phone": clean_data.get("Phone") or clean_data.get("Contact No.", "") or clean_data.get("Company POC Phone Number", ""),
+            "Email Id": clean_data.get("Email Id") or clean_data.get("Email", "") or clean_data.get("Company POC Email ID", ""),
+            "Email": clean_data.get("Email") or clean_data.get("Email Id", "") or clean_data.get("Company POC Email ID", ""),
+            "Remarks /Updates": clean_data.get("Remarks /Updates") or clean_data.get("Last Update", "") or clean_data.get("Notes / Remarks", ""),
+            "Last Update": clean_data.get("Last Update") or clean_data.get("Remarks /Updates", "") or clean_data.get("Notes / Remarks", ""),
             "Revenue Estimation (In INR) (Oct 26 - Mar 27)": clean_data.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)") or clean_data.get("Revenue Estimations", ""),
+            "Revenue Estimations": clean_data.get("Revenue Estimations") or clean_data.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)", ""),
             "Retainer Cost": clean_data.get("Retainer Cost") or clean_data.get("Retainer cost", ""),
+            "Retainer cost": clean_data.get("Retainer cost") or clean_data.get("Retainer Cost", ""),
             "Lead": clean_data.get("Lead") or clean_data.get("Status", ""),
             "Lead Status": clean_data.get("Lead Status") or clean_data.get("Stage", ""),
             "Status": clean_data.get("Status") or clean_data.get("Lead", ""),
@@ -714,9 +774,9 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
             if av and not clean_data.get(ak):
                 clean_data[ak] = av
         
-        # Auto-add any new non-empty columns (e.g. Tender Detail fields) to sheet headers (skip synthetic aliases on Sept tab)
-        sept_ignore_aliases = {"Source", "Name", "Phone", "Email", "Last Update", "Revenue Estimations", "Retainer cost", "Lead ID", "Stage", "Status"} if is_sept_lead else set()
-        new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and k not in sept_ignore_aliases and v != ""]
+        # Auto-add any new non-empty columns (e.g. Tender Detail fields) to sheet headers (skip synthetic aliases)
+        ignore_aliases = {"Source", "Name", "Phone", "Email", "Last Update", "Revenue Estimations", "Retainer cost", "Lead ID", "Stage", "Status", "Company/Brand Name", "Company Name", "Company POC Name", "Company POC Email ID", "Company POC Phone Number", "Cog POC Name", "Date", "POC Name", "Lead Source", "Retainer Cost", "Lead Status", "Lead", "Contact No.", "Email Id"}
+        new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and k not in ignore_aliases and v != ""]
         if new_cols:
             try:
                 updated_headers = headers + new_cols
@@ -732,7 +792,10 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
 
         row_values = []
         for dh in deduped_headers:
-            row_values.append(str(clean_data.get(dh, "")).strip())
+            val = str(clean_data.get(dh, "")).strip()
+            if (dh == "" or dh.startswith("Unnamed")) and clean_data.get("Date"):
+                val = str(clean_data.get("Date")).strip()
+            row_values.append(val)
             
         range_to_update = f"'{final_range}'!A{actual_row}"
         body = {

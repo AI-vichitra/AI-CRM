@@ -597,8 +597,6 @@ export default function CRMTable({
                     // Render formatted cells
                     const renderCellContent = () => {
                       if (col.toLowerCase().includes("company")) {
-                        const rowSource = getRowSource(row).toLowerCase();
-                        const isWebsite = rowSource.includes("website") || rowSource.includes("web");
                         return (
                           <div className="flex items-center gap-2">
                             <button
@@ -607,11 +605,6 @@ export default function CRMTable({
                             >
                               {cellVal}
                             </button>
-                            {isWebsite && (
-                              <span className="px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 rounded text-[9px] font-bold uppercase tracking-wide whitespace-nowrap">
-                                Fresh Lead
-                              </span>
-                            )}
                           </div>
                         );
                       }
@@ -1040,11 +1033,21 @@ export default function CRMTable({
                       </p>
                     </div>
                     <div className="p-3.5 rounded-xl border border-indigo-200/60 dark:border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-500/[0.04]">
-                      <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono uppercase font-semibold">
-                        Retainer Cost
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono uppercase font-semibold">
+                          Retainer Cost
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 uppercase tracking-wide">
+                          Monthly
+                        </span>
+                      </div>
                       <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300 mt-1 font-mono">
-                        {retainerCost !== "—" && !String(retainerCost).startsWith("₹") ? `₹${retainerCost}` : retainerCost}
+                        {(() => {
+                          if (retainerCost === "—" || !retainerCost) return "—";
+                          const str = String(retainerCost).trim();
+                          if (/^\d{4}[-/.]\d{1,2}/.test(str)) return str;
+                          return str.startsWith("₹") ? str : `₹${str}`;
+                        })()}
                       </p>
                     </div>
                   </div>

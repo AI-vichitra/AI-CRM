@@ -11,6 +11,7 @@ class ConversationCreate(BaseModel):
     conversation_type: str = Field(..., description="Type of conversation: Call, WhatsApp, Email, Meeting")
     message: str = Field(..., description="Conversation notes / message content")
     lead_key: Optional[str] = Field(None, description="Optional secondary company or lead key")
+    author: Optional[str] = Field(None, description="Optional author / user who recorded the conversation")
 
 @router.get("/")
 def list_conversations(
@@ -39,7 +40,8 @@ def create_conversation(payload: ConversationCreate):
             date=payload.date,
             conversation_type=payload.conversation_type,
             message=payload.message,
-            lead_key=payload.lead_key
+            lead_key=payload.lead_key,
+            author=payload.author
         )
         return created
     except Exception as e:

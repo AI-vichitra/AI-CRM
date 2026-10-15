@@ -51,4 +51,5 @@ export interface Conversation {
   conversation_type: "Call" | "WhatsApp" | "Email" | "Meeting" | string;
   message: string;
   created_at: string;
+  author?: string;
 }

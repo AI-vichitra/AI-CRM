@@ -20,9 +20,18 @@ def init_conversations_table():
             date TEXT NOT NULL,
             conversation_type TEXT NOT NULL,
             message TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            author TEXT
         )
     """)
+    # Ensure author column exists if created previously
+    cursor.execute("PRAGMA table_info(conversations)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "author" not in columns:
+        try:
+            cursor.execute("ALTER TABLE conversations ADD COLUMN author TEXT")
+        except Exception:
+            pass
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_date ON conversations(date)")
     conn.commit()
@@ -36,7 +45,8 @@ def add_conversation(
     date: str,
     conversation_type: str,
     message: str,
-    lead_key: Optional[str] = None
+    lead_key: Optional[str] = None,
+    author: Optional[str] = None
 ) -> Dict[str, Any]:
     init_conversations_table()
     now_str = datetime.utcnow().isoformat()
@@ -45,13 +55,14 @@ def add_conversation(
     type_clean = str(conversation_type).strip()
     msg_clean = str(message).strip()
     key_clean = str(lead_key).strip() if lead_key else ""
+    author_clean = str(author).strip() if author else ""
 
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO conversations (lead_id, lead_key, date, conversation_type, message, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (lead_id_clean, key_clean, date_clean, type_clean, msg_clean, now_str))
+        INSERT INTO conversations (lead_id, lead_key, date, conversation_type, message, created_at, author)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (lead_id_clean, key_clean, date_clean, type_clean, msg_clean, now_str, author_clean))
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
@@ -63,7 +74,8 @@ def add_conversation(
         "date": date_clean,
         "conversation_type": type_clean,
         "message": msg_clean,
-        "created_at": now_str
+        "created_at": now_str,
+        "author": author_clean
     }
 
 def get_conversations(
@@ -74,7 +86,7 @@ def get_conversations(
     conn = get_connection()
     cursor = conn.cursor()
 
-    query = "SELECT id, lead_id, lead_key, date, conversation_type, message, created_at FROM conversations"
+    query = "SELECT id, lead_id, lead_key, date, conversation_type, message, created_at, author FROM conversations"
     params = []
     conditions = []
 
@@ -105,7 +117,8 @@ def get_conversations(
             "date": r["date"],
             "conversation_type": r["conversation_type"],
             "message": r["message"],
-            "created_at": r["created_at"]
+            "created_at": r["created_at"],
+            "author": r["author"] if "author" in r.keys() and r["author"] else ""
         })
     return results
 

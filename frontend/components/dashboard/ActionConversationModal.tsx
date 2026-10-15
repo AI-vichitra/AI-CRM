@@ -225,12 +225,14 @@ export default function ActionConversationModal({
 
     try {
       setSaving(true);
+      const cogPoc = String(lead?.["Cog POC"] || lead?.["Cog POC Name"] || "Cog Team").trim();
       const newEntry = await api.addConversation({
         lead_id: leadId,
         date: selectedDate,
         conversation_type: selectedType,
         message: message.trim(),
         lead_key: String(companyName).trim(),
+        author: cogPoc,
       });
 
       setConversations((prev) => [newEntry, ...prev]);
@@ -264,7 +266,7 @@ export default function ActionConversationModal({
       <div className="absolute inset-0" onClick={onClose} />
 
       <div className="relative w-full max-w-3xl bg-white dark:bg-[#111118] border border-gray-200 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[92vh] z-10 animate-scale-in">
-        {/* Header - The Action heading is already implemented here */}
+        {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-white dark:bg-[#111118]">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white font-sans tracking-tight">
@@ -286,8 +288,8 @@ export default function ActionConversationModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
-          {/* 1. Top row — Action buttons */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+          {/* 1. Top row — Action tabs */}
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -316,21 +318,21 @@ export default function ActionConversationModal({
             </button>
           </div>
 
-          {/* 2. Middle section — Calendar */}
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#161622] p-4 shadow-xs">
+          {/* 2. Middle section — Sleek compact Calendar */}
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#161622] p-3 sm:p-3.5 shadow-xs">
             {/* Month & Navigation Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-white/5 mb-3">
-              <span className="text-sm font-bold text-gray-900 dark:text-white font-sans">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-white/5 mb-2">
+              <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-sans">
                 {MONTH_NAMES[currentMonth]} {currentYear}
               </span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={handlePrevMonth}
                   className="p-1 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition-colors cursor-pointer"
                   title="Previous Month"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
@@ -338,21 +340,21 @@ export default function ActionConversationModal({
                   className="p-1 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition-colors cursor-pointer"
                   title="Next Month"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
             {/* Weekday columns */}
-            <div className="grid grid-cols-7 text-center text-xs font-semibold text-gray-500 dark:text-[#888899] py-1 border-b border-gray-100 dark:border-white/5 mb-1">
+            <div className="grid grid-cols-7 text-center text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-[#888899] py-1 border-b border-gray-100 dark:border-white/5 mb-1">
               {DAY_NAMES.map((d) => (
-                <div key={d} className="py-1">
+                <div key={d} className="py-0.5">
                   {d}
                 </div>
               ))}
             </div>
 
-            {/* Calendar Days Grid */}
+            {/* Calendar Days Grid: compact size */}
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((cell, idx) => {
                 const isSelected = selectedDate === cell.dateStr;
@@ -363,7 +365,7 @@ export default function ActionConversationModal({
                     type="button"
                     key={`${cell.dateStr}-${idx}`}
                     onClick={() => setSelectedDate(cell.dateStr)}
-                    className={`h-11 sm:h-12 flex flex-col items-center justify-center rounded-xl text-xs transition-all cursor-pointer relative ${
+                    className={`h-8 sm:h-9 flex flex-col items-center justify-center rounded-lg text-xs transition-all cursor-pointer relative ${
                       isSelected
                         ? "border-2 border-gray-900 dark:border-white bg-gray-50 dark:bg-white/10 font-bold text-gray-950 dark:text-white shadow-xs"
                         : cell.isCurrentMonth
@@ -374,7 +376,7 @@ export default function ActionConversationModal({
                     <span className="leading-none">{cell.dayNum}</span>
                     {/* Mark dates on which conversations have been recorded */}
                     {hasConversations && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-900 dark:bg-white mt-1 shrink-0" />
+                      <span className="w-1 h-1 rounded-full bg-gray-900 dark:bg-white mt-0.5 shrink-0" />
                     )}
                   </button>
                 );
@@ -382,7 +384,7 @@ export default function ActionConversationModal({
             </div>
           </div>
 
-          {/* If the selected date has conversations, show a helpful summary widget */}
+          {/* If the selected date has conversations, show enhanced summary widget with larger font and author */}
           {selectedDateConversations.length > 0 && activeTab === "new" && (
             <div className="p-3.5 rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-blue-900 dark:text-blue-300">
@@ -393,32 +395,38 @@ export default function ActionConversationModal({
                 <button
                   type="button"
                   onClick={() => setActiveTab("history")}
-                  className="text-[11px] font-mono text-blue-600 hover:underline cursor-pointer"
+                  className="text-xs font-mono text-blue-600 hover:underline cursor-pointer"
                 >
                   View All History →
                 </button>
               </div>
-              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {selectedDateConversations.map((c) => (
                   <div
                     key={c.id}
-                    className="p-2 rounded-lg bg-white dark:bg-[#111118] border border-blue-100 dark:border-white/5 flex items-start justify-between gap-2 text-xs"
+                    className="p-3 rounded-lg bg-white dark:bg-[#111118] border border-blue-100 dark:border-white/5 flex items-start justify-between gap-3 shadow-xs"
                   >
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-gray-200">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold font-mono px-2 py-0.5 rounded bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-gray-200">
                           {c.conversation_type}
                         </span>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1 font-sans">
+                          <User className="w-3 h-3 text-gray-400 shrink-0" />
+                          Added by <span className="font-semibold text-gray-700 dark:text-gray-300">{c.author || lead?.["Cog POC"] || "Cog Team"}</span>
+                        </span>
                       </div>
-                      <p className="text-gray-800 dark:text-gray-200 truncate">{c.message}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">
+                        {c.message}
+                      </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleDeleteConversation(c.id)}
-                      className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors cursor-pointer shrink-0"
+                      className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors cursor-pointer shrink-0 mt-0.5"
                       title="Delete entry"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -428,78 +436,75 @@ export default function ActionConversationModal({
 
           {/* 3. Bottom section: Tab dependent */}
           {activeTab === "new" ? (
-            /* Conversation Form */
-            <form onSubmit={handleSaveConversation} className="space-y-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                {/* Left column: Conversation type */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-900 dark:text-white font-sans block">
-                    Conversation Type
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {CONVERSATION_TYPES.map(({ id, label, icon: Icon }) => {
-                      const isSelected = selectedType === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setSelectedType(id)}
-                          className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs ${
-                            isSelected
-                              ? "border-2 border-gray-900 dark:border-white bg-gray-50 dark:bg-white/10 text-gray-950 dark:text-white font-bold"
-                              : "border border-gray-200 dark:border-white/10 bg-white dark:bg-[#161622] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5"
-                          }`}
-                        >
-                          <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+            /* Conversation Form: full-width conversation types without clipping, generous message input */
+            <form onSubmit={handleSaveConversation} className="space-y-3 pt-1">
+              <div>
+                <label className="text-xs font-semibold text-gray-900 dark:text-white font-sans block mb-1.5">
+                  Conversation Type
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {CONVERSATION_TYPES.map(({ id, label, icon: Icon }) => {
+                    const isSelected = selectedType === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setSelectedType(id)}
+                        className={`flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs whitespace-nowrap ${
+                          isSelected
+                            ? "border-2 border-gray-900 dark:border-white bg-gray-50 dark:bg-white/10 text-gray-950 dark:text-white font-bold"
+                            : "border border-gray-200 dark:border-white/10 bg-white dark:bg-[#161622] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5 shrink-0" />
+                        <span className="whitespace-nowrap">{label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                {/* Right column: Message input */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-gray-900 dark:text-white font-sans block">
-                      Message
-                    </label>
-                    <span className="text-[10px] font-mono text-gray-400">
-                      Date: {selectedDate}
-                    </span>
-                  </div>
-                  <div className="relative flex items-center">
-                    <input
-                      type="text"
-                      placeholder="Type your message..."
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      className="w-full pl-3.5 pr-20 py-2.5 text-xs bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white font-sans outline-none focus:border-gray-900 dark:focus:border-white transition-all shadow-xs"
-                    />
-                    <button
-                      type="submit"
-                      disabled={saving || !message.trim()}
-                      className={`absolute right-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-                        message.trim() && !saving
-                          ? "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-gray-900 shadow-xs"
-                          : "bg-gray-100 dark:bg-white/5 text-gray-400 cursor-not-allowed"
-                      }`}
-                    >
-                      <Send className="w-3 h-3" />
-                      <span>{saving ? "Saving..." : "Save"}</span>
-                    </button>
-                  </div>
+              {/* Message input */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-900 dark:text-white font-sans block">
+                    Message
+                  </label>
+                  <span className="text-[11px] font-mono text-gray-400">
+                    Date: {selectedDate}
+                  </span>
+                </div>
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    placeholder="Type your message..."
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    className="w-full pl-3.5 pr-20 py-2.5 text-xs sm:text-sm bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white font-sans outline-none focus:border-gray-900 dark:focus:border-white transition-all shadow-xs"
+                  />
+                  <button
+                    type="submit"
+                    disabled={saving || !message.trim()}
+                    className={`absolute right-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                      message.trim() && !saving
+                        ? "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-gray-900 shadow-xs"
+                        : "bg-gray-100 dark:bg-white/5 text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <Send className="w-3 h-3" />
+                    <span>{saving ? "Saving..." : "Save"}</span>
+                  </button>
                 </div>
               </div>
             </form>
           ) : (
-            /* History View: previous conversations with newest first */
+            /* History View: previous conversations with author view and larger readable font */
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-900 dark:text-white font-sans">
                   Conversation History
                 </span>
-                <span className="text-[11px] font-mono text-gray-400">
+                <span className="text-xs font-mono text-gray-400">
                   {conversations.length} {conversations.length === 1 ? "entry" : "entries"}
                 </span>
               </div>
@@ -527,7 +532,7 @@ export default function ActionConversationModal({
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
                   {conversations.map((c) => {
                     const typeObj = CONVERSATION_TYPES.find((t) => t.id === c.conversation_type);
                     const IconComponent = typeObj ? typeObj.icon : MessageCircle;
@@ -535,30 +540,34 @@ export default function ActionConversationModal({
                     return (
                       <div
                         key={c.id}
-                        className="p-3 rounded-xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#161622] flex items-start justify-between gap-3 shadow-xs hover:border-gray-300 dark:hover:border-white/20 transition-all"
+                        className="p-3.5 rounded-xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#161622] flex items-start justify-between gap-3 shadow-xs hover:border-gray-300 dark:hover:border-white/20 transition-all"
                       >
                         <div className="flex items-start gap-3 min-w-0 flex-1">
                           <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-white/10 flex items-center justify-center shrink-0 mt-0.5 text-gray-800 dark:text-gray-200">
                             <IconComponent className="w-4 h-4" />
                           </div>
-                          <div className="space-y-1 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
+                          <div className="space-y-1.5 min-w-0 flex-1">
+                            <div className="flex items-center gap-2.5 flex-wrap">
                               <span className="text-xs font-bold text-gray-900 dark:text-white">
                                 {c.conversation_type}
                               </span>
-                              <span className="text-[10px] font-mono text-gray-400 bg-gray-50 dark:bg-white/5 px-2 py-0.5 rounded border border-gray-100 dark:border-white/5">
+                              <span className="text-[11px] font-mono text-gray-500 bg-gray-50 dark:bg-white/5 px-2 py-0.5 rounded border border-gray-100 dark:border-white/5">
                                 {c.date}
                               </span>
                               {c.created_at && (
-                                <span className="text-[10px] text-gray-400 font-mono">
+                                <span className="text-[11px] text-gray-400 font-mono">
                                   {new Date(c.created_at).toLocaleTimeString([], {
                                     hour: "2-digit",
                                     minute: "2-digit",
                                   })}
                                 </span>
                               )}
+                              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1 font-sans ml-auto">
+                                <User className="w-3 h-3 text-gray-400 shrink-0" />
+                                Added by <span className="font-semibold text-gray-700 dark:text-gray-300">{c.author || lead?.["Cog POC"] || "Cog Team"}</span>
+                              </span>
                             </div>
-                            <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words leading-relaxed">
                               {c.message}
                             </p>
                           </div>
@@ -570,7 +579,7 @@ export default function ActionConversationModal({
                           className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer shrink-0"
                           title="Delete entry"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     );

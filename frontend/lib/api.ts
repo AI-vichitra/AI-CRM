@@ -77,7 +77,7 @@ export const api = {
     const query = params.toString() ? `?${params.toString()}` : "";
     return apiFetch<Conversation[]>(`/api/conversations/${query}`);
   },
-  addConversation: (data: { lead_id: string; date: string; conversation_type: string; message: string; lead_key?: string }) =>
+  addConversation: (data: { lead_id: string; date: string; conversation_type: string; message: string; lead_key?: string; author?: string }) =>
     apiFetch<Conversation>("/api/conversations/", { method: "POST", body: JSON.stringify(data) }),
   deleteConversation: (id: number) =>
     apiFetch<{ ok: boolean; id: number }>(`/api/conversations/${id}`, { method: "DELETE" }),

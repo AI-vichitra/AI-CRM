@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Save } from "lucide-react";
+import { X, Save, Sparkles, ChevronDown } from "lucide-react";
 
 interface LeadFormModalProps {
   isOpen: boolean;
@@ -82,6 +82,18 @@ const REQUIREMENT_OPTIONS = [
   "VIDEO SHOOTS",
 ];
 
+const STATUS_OPTIONS = ["Hot", "Warm", "Cold"];
+
+const STAGE_OPTIONS = [
+  "Lead",
+  "Contacted",
+  "Proposal sent",
+  "Proposal to be Sent",
+  "Negotiation",
+  "Won",
+  "Lost",
+];
+
 export default function LeadFormModal({
   isOpen,
   onClose,
@@ -94,20 +106,26 @@ export default function LeadFormModal({
 }: LeadFormModalProps) {
   const [loading, setLoading] = useState(false);
 
-  // Toggle state: Retainer vs Project
-  const [leadType, setLeadType] = useState<"Retainer" | "Project">("Retainer");
-
-  // Form states
+  // Stage 1: Basic Details
   const [date, setDate] = useState("");
   const [company, setCompany] = useState("");
-  const [pocName, setPocName] = useState("");
-  const [pocEmail, setPocEmail] = useState("");
-  const [pocPhone, setPocPhone] = useState("");
-  const [cogPoc, setCogPoc] = useState("");
-  const [source, setSource] = useState("");
   const [requirement, setRequirement] = useState("");
   const [customRequirement, setCustomRequirement] = useState("");
+  const [status, setStatus] = useState("Warm");
+  const [stage, setStage] = useState("Lead");
+  const [cogPoc, setCogPoc] = useState("");
+  const [source, setSource] = useState("");
+  const [pocName, setPocName] = useState("");
+  const [pocPhone, setPocPhone] = useState("");
+  const [pocEmail, setPocEmail] = useState("");
+
+  // Stage 2: Advanced Details
+  const [leadType, setLeadType] = useState<"Retainer" | "Project">("Retainer");
   const [costValue, setCostValue] = useState("");
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [cogPocEmail, setCogPocEmail] = useState("");
+  const [messageFromProspect, setMessageFromProspect] = useState("");
+  const [remarks, setRemarks] = useState("");
 
   // Generic fallback state for internal leads tab
   const [genericFormData, setGenericFormData] = useState<Record<string, string>>({});
@@ -146,6 +164,14 @@ export default function LeadFormModal({
             initialData["company"] ||
             ""
         ).trim()
+      );
+
+      setStatus(
+        String(initialData["Status"] || initialData["Lead"] || "Warm").trim()
+      );
+
+      setStage(
+        String(initialData["Stage"] || initialData["Lead Status"] || "Lead").trim()
       );
 
       setPocName(
@@ -187,7 +213,7 @@ export default function LeadFormModal({
         ).trim()
       );
 
-      setSource(String(initialData["Source"] || initialData["source"] || "").trim());
+      setSource(String(initialData["Source"] || initialData["Lead Source"] || "").trim());
 
       // Requirement handling
       const rawReq = String(initialData["Requirement"] || initialData["requirement"] || "").trim();
@@ -223,6 +249,14 @@ export default function LeadFormModal({
         );
       }
 
+      // Stage 2 Advanced Details
+      const rawFollowUp = initialData["Follow up date"] || initialData["Follow Up Date (Latest )"] || initialData["Deadline"] || "";
+      setFollowUpDate(formatDateForInput(rawFollowUp));
+
+      setCogPocEmail(String(initialData["POC email"] || initialData["Cog POC Email"] || "").trim());
+      setMessageFromProspect(String(initialData["Message from Prospect"] || "").trim());
+      setRemarks(String(initialData["Remarks /Updates"] || initialData["Last Update"] || "").trim());
+
       // Generic fallback
       const parsedGeneric: Record<string, string> = {};
       genericHeaders.forEach((h) => {
@@ -240,6 +274,8 @@ export default function LeadFormModal({
       setLeadType("Retainer");
       setDate(getTodayInputDate());
       setCompany("");
+      setStatus("Warm");
+      setStage("Lead");
       setPocName("");
       setPocEmail("");
       setPocPhone("");
@@ -248,6 +284,10 @@ export default function LeadFormModal({
       setRequirement("");
       setCustomRequirement("");
       setCostValue("");
+      setFollowUpDate("");
+      setCogPocEmail("");
+      setMessageFromProspect("");
+      setRemarks("");
 
       const emptyGeneric: Record<string, string> = {};
       genericHeaders.forEach((h) => {
@@ -275,10 +315,10 @@ export default function LeadFormModal({
         ...(initialData || {}),
       };
 
-      // 1. Date
+      // 1. Date (Stage 1)
       payload["Date"] = date;
 
-      // 2. Company / Brand Name -> map to Company and Company/Brand Name
+      // 2. Company / Brand Name
       payload["Company"] = company;
       headers.forEach((h) => {
         const hl = h.toLowerCase().trim();
@@ -287,34 +327,19 @@ export default function LeadFormModal({
         }
       });
 
-      // 3. Company POC Name -> map to Name & POC Name
-      payload["Name"] = pocName;
-      headers.forEach((h) => {
-        const hl = h.toLowerCase().trim();
-        if (hl === "name" || hl === "poc name" || hl === "company poc name") {
-          payload[h] = pocName;
-        }
-      });
+      // 3. Requirement
+      const finalReq = (requirement === "OTHER" ? customRequirement : requirement) || "";
+      payload["Requirement"] = finalReq;
 
-      // 4. Company POC Email ID -> map to Email & Email Id (Optional)
-      payload["Email"] = pocEmail;
-      headers.forEach((h) => {
-        const hl = h.toLowerCase().trim();
-        if (hl === "email" || hl === "email id" || hl === "company poc email id") {
-          payload[h] = pocEmail;
-        }
-      });
+      // 4. Status <-> Lead
+      payload["Status"] = status || "Warm";
+      payload["Lead"] = status || "Warm";
 
-      // 5. Company POC Phone Number -> map to Phone & Contact No. (Optional)
-      payload["Phone"] = pocPhone;
-      headers.forEach((h) => {
-        const hl = h.toLowerCase().trim();
-        if (hl === "phone" || hl === "contact no." || hl === "company poc phone number") {
-          payload[h] = pocPhone;
-        }
-      });
+      // 5. Stage <-> Lead Status
+      payload["Stage"] = stage || "Lead";
+      payload["Lead Status"] = stage || "Lead";
 
-      // 6. Cog POC Name -> map to Cog POC & Cog POC Name
+      // 6. Cog POC Name
       payload["Cog POC"] = cogPoc;
       headers.forEach((h) => {
         const hl = h.toLowerCase().trim();
@@ -325,6 +350,7 @@ export default function LeadFormModal({
 
       // 7. Source
       payload["Source"] = source;
+      payload["Lead Source"] = source;
       headers.forEach((h) => {
         const hl = h.toLowerCase().trim();
         if (hl === "source" || hl === "lead source") {
@@ -332,11 +358,37 @@ export default function LeadFormModal({
         }
       });
 
-      // 8. Requirement
-      const finalReq = (requirement === "OTHER" ? customRequirement : requirement) || "";
-      payload["Requirement"] = finalReq;
+      // 8. Company POC Name
+      payload["Name"] = pocName;
+      payload["POC Name"] = pocName;
+      headers.forEach((h) => {
+        const hl = h.toLowerCase().trim();
+        if (hl === "name" || hl === "poc name" || hl === "company poc name") {
+          payload[h] = pocName;
+        }
+      });
 
-      // 9. Cost field based on Toggle: Retainer vs Project
+      // 9. Company POC Phone Number
+      payload["Phone"] = pocPhone;
+      payload["Contact No."] = pocPhone;
+      headers.forEach((h) => {
+        const hl = h.toLowerCase().trim();
+        if (hl === "phone" || hl === "contact no." || hl === "company poc phone number") {
+          payload[h] = pocPhone;
+        }
+      });
+
+      // 10. Company POC Email ID
+      payload["Email"] = pocEmail;
+      payload["Email Id"] = pocEmail;
+      headers.forEach((h) => {
+        const hl = h.toLowerCase().trim();
+        if (hl === "email" || hl === "email id" || hl === "company poc email id") {
+          payload[h] = pocEmail;
+        }
+      });
+
+      // Stage 2: Advanced Commercials & Details
       if (leadType === "Retainer") {
         payload["Retainer cost"] = costValue;
         payload["Retainer Cost"] = costValue;
@@ -351,6 +403,25 @@ export default function LeadFormModal({
         payload["Type of Project"] = "Project";
       }
 
+      if (followUpDate) {
+        payload["Follow up date"] = followUpDate;
+        payload["Follow Up Date (Latest )"] = followUpDate;
+      }
+
+      if (cogPocEmail) {
+        payload["POC email"] = cogPocEmail;
+        payload["Cog POC Email"] = cogPocEmail;
+      }
+
+      if (messageFromProspect) {
+        payload["Message from Prospect"] = messageFromProspect;
+      }
+
+      if (remarks) {
+        payload["Remarks /Updates"] = remarks;
+        payload["Last Update"] = remarks;
+      }
+
       await onSave(payload);
       onClose();
     } catch (err) {
@@ -361,7 +432,7 @@ export default function LeadFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm animate-fade-in">
       {/* Click outside backdrop to close */}
       <div className="absolute inset-0" onClick={onClose} />
 
@@ -384,213 +455,356 @@ export default function LeadFormModal({
           </button>
         </div>
 
-        {/* Active Leads form */}
+        {/* Active Leads form: Two Stages */}
         {isActiveLeadsMode ? (
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-            {/* Top Toggle: Retainer vs Project (Fixed Type of Project) */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899]">
-                Lead Type (Type of Project)
-              </label>
-              <div className="grid grid-cols-2 p-1 bg-gray-100 dark:bg-[#161622] rounded-xl border border-gray-200 dark:border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setLeadType("Retainer")}
-                  className={`py-2 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    leadType === "Retainer"
-                      ? "bg-white dark:bg-emerald-600 text-gray-900 dark:text-white shadow-sm font-bold"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                  }`}
-                >
-                  <span>🏢 Retainer</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLeadType("Project")}
-                  className={`py-2 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    leadType === "Project"
-                      ? "bg-white dark:bg-emerald-600 text-gray-900 dark:text-white shadow-sm font-bold"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                  }`}
-                >
-                  <span>🚀 Project</span>
-                </button>
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+            
+            {/* ======================================================== */}
+            {/* STAGE 1: BASIC DETAILS                                   */}
+            {/* ======================================================== */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[11px] font-bold">
+                    1
+                  </span>
+                  <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider font-mono">
+                    Basic Details
+                  </h4>
+                </div>
+                <span className="text-[10px] text-gray-400 font-sans">Required to register lead</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Date */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
+                    <span>Date</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    required
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
+
+                {/* 2. Company / Brand Name */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
+                    <span>Company / Brand Name</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Acme Corp..."
+                    value={company}
+                    required
+                    onChange={(e) => setCompany(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
+
+                {/* 3. Requirement */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
+                    <span>Requirement</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={requirement}
+                    required
+                    onChange={(e) => setRequirement(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none cursor-pointer"
+                  >
+                    <option value="">-- Select Requirement --</option>
+                    {REQUIREMENT_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                    <option value="OTHER">Other / Custom</option>
+                  </select>
+                  {requirement === "OTHER" && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter custom requirement..."
+                      value={customRequirement}
+                      onChange={(e) => setCustomRequirement(e.target.value)}
+                      className="w-full mt-1.5 px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                    />
+                  )}
+                </div>
+
+                {/* 4. Cog POC */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
+                    <span>Cog POC</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Kanishk, Apoorv, Anoop..."
+                    value={cogPoc}
+                    required
+                    onChange={(e) => setCogPoc(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
+
+                {/* 5. Status (Hot / Warm / Cold) */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
+                    <span>Status</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={status}
+                    required
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none cursor-pointer"
+                  >
+                    {STATUS_OPTIONS.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 6. Stage */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
+                    <span>Stage</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={stage}
+                    required
+                    onChange={(e) => setStage(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none cursor-pointer"
+                  >
+                    {STAGE_OPTIONS.map((stg) => (
+                      <option key={stg} value={stg}>
+                        {stg}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 7. Lead Source */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
+                    <span>Lead Source</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={source}
+                    required
+                    onChange={(e) => setSource(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none cursor-pointer"
+                  >
+                    <option value="">-- Select Source --</option>
+                    {SOURCE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                    {source && !SOURCE_OPTIONS.includes(source) && (
+                      <option value={source}>{source}</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* 8. Company POC Name */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                    <span>Company POC Name</span>
+                    <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter POC Name..."
+                    value={pocName}
+                    onChange={(e) => setPocName(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
+
+                {/* 9. Company POC Phone */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                    <span>Company POC Phone</span>
+                    <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={pocPhone}
+                    onChange={(e) => setPocPhone(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
+
+                {/* 10. Company POC Email */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                    <span>Company POC Email</span>
+                    <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="poc@company.com"
+                    value={pocEmail}
+                    onChange={(e) => setPocEmail(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 1. Date (Compulsory) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>Date</span>
-                  <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={date}
-                  required
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
-                />
+            {/* ======================================================== */}
+            {/* STAGE 2: ADVANCED DETAILS (Commercials, Notes, Deadlines) */}
+            {/* ======================================================== */}
+            <div className="space-y-4 pt-4 border-t border-gray-200/80 dark:border-white/10">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px] font-bold">
+                    2
+                  </span>
+                  <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider font-mono">
+                    Advanced Details
+                  </h4>
+                </div>
+                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                  Scroll down for Commercials & Notes
+                </span>
               </div>
 
-              {/* 2. Company/Brand Name (Compulsory) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>Company/Brand Name</span>
-                  <span className="text-red-500">*</span>
+              {/* Lead Type / Commercial Type Toggle */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899]">
+                  Type of Project / Commercial Model
                 </label>
-                <input
-                  type="text"
-                  placeholder="Enter Company or Brand Name..."
-                  value={company}
-                  required
-                  onChange={(e) => setCompany(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
-                />
+                <div className="grid grid-cols-2 p-1 bg-gray-100 dark:bg-[#161622] rounded-xl border border-gray-200 dark:border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setLeadType("Retainer")}
+                    className={`py-2 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      leadType === "Retainer"
+                        ? "bg-white dark:bg-indigo-600 text-gray-900 dark:text-white shadow-sm font-bold"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <span>🏢 Retainer</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLeadType("Project")}
+                    className={`py-2 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      leadType === "Project"
+                        ? "bg-white dark:bg-indigo-600 text-gray-900 dark:text-white shadow-sm font-bold"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <span>🚀 Project</span>
+                  </button>
+                </div>
               </div>
 
-              {/* 3. Company POC Name (Compulsory) */}
+              {/* Commercial Cost Field with Monthly Tag for Retainer */}
               <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>Company POC Name</span>
-                  <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter Company POC Name..."
-                  value={pocName}
-                  required
-                  onChange={(e) => setPocName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
-                />
-              </div>
-
-              {/* 4. Cog POC Name (Compulsory) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>Cog POC Name</span>
-                  <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter Cog POC Name..."
-                  value={cogPoc}
-                  required
-                  onChange={(e) => setCogPoc(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
-                />
-              </div>
-
-              {/* 5. Company POC Email ID (Optional) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
-                  <span>Company POC Email ID</span>
-                  <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
-                </label>
-                <input
-                  type="email"
-                  placeholder="name@company.com"
-                  value={pocEmail}
-                  onChange={(e) => setPocEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
-                />
-              </div>
-
-              {/* 6. Company POC Phone Number (Optional) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
-                  <span>Company POC Phone Number</span>
-                  <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  value={pocPhone}
-                  onChange={(e) => setPocPhone(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
-                />
-              </div>
-
-              {/* 7. Source (Compulsory) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>Source</span>
-                  <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={source}
-                  required
-                  onChange={(e) => setSource(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none cursor-pointer"
-                >
-                  <option value="">-- Select Source --</option>
-                  {SOURCE_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                  {source && !SOURCE_OPTIONS.includes(source) && (
-                    <option value={source}>{source}</option>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                    <span>{leadType === "Retainer" ? "Retainer Cost (INR)" : "Revenue Estimations (INR)"}</span>
+                    <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                  </label>
+                  {leadType === "Retainer" && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800 uppercase tracking-wide">
+                      Monthly
+                    </span>
                   )}
-                </select>
-              </div>
-
-              {/* 8. Requirement (Compulsory) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>Requirement</span>
-                  <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={requirement}
-                  required
-                  onChange={(e) => setRequirement(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none cursor-pointer"
-                >
-                  <option value="">-- Select Requirement --</option>
-                  {REQUIREMENT_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                  <option value="OTHER">Other / Custom</option>
-                </select>
-                {requirement === "OTHER" && (
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter custom requirement..."
-                    value={customRequirement}
-                    onChange={(e) => setCustomRequirement(e.target.value)}
-                    className="w-full mt-1.5 px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
-                  />
-                )}
-              </div>
-
-              {/* 9. Dynamic Financial Field: Retainer Cost vs Revenue Estimations (Compulsory, full width) */}
-              <div className="space-y-1.5 flex flex-col md:col-span-2">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>{leadType === "Retainer" ? "Retainer Cost" : "Revenue Estimations"}</span>
-                  <span className="text-red-500">*</span>
-                </label>
+                </div>
                 <input
                   type="text"
-                  required
                   placeholder={
                     leadType === "Retainer"
-                      ? "Enter Retainer Cost (e.g. 1,50,000)..."
-                      : "Enter Revenue Estimations (e.g. 5,00,000)..."
+                      ? "Enter monthly retainer cost (e.g. 150000)..."
+                      : "Enter project revenue estimation (e.g. 500000)..."
                   }
                   value={costValue}
                   onChange={(e) => setCostValue(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-indigo-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Follow-up Date / Deadline */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                    <span>Follow-Up Date / Deadline</span>
+                    <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-indigo-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
+
+                {/* Cog POC Email ID */}
+                <div className="space-y-1.5 flex flex-col">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                    <span>Cog POC Email ID</span>
+                    <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="poc@cogculture.agency"
+                    value={cogPocEmail}
+                    onChange={(e) => setCogPocEmail(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-indigo-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Message from Prospect */}
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                  <span>Message from Prospect / Inquiry</span>
+                  <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Paste prospect message, requirement notes, or client brief..."
+                  value={messageFromProspect}
+                  onChange={(e) => setMessageFromProspect(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-indigo-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all resize-none"
+                />
+              </div>
+
+              {/* Remarks / Updates / Notes */}
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1.5">
+                  <span>Remarks / Updates</span>
+                  <span className="text-[9px] text-gray-400 font-sans lowercase">(optional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Add latest update, conversation summary, or next action..."
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-indigo-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all resize-none"
                 />
               </div>
             </div>
 
             {/* Footer Actions */}
-            <div className="pt-5 border-t border-gray-100 dark:border-[rgba(255,255,255,0.05)] flex items-center justify-end gap-3">
+            <div className="pt-5 border-t border-gray-100 dark:border-[rgba(255,255,255,0.05)] flex items-center justify-end gap-3 sticky bottom-0 bg-white dark:bg-[#0C0C12] pb-1">
               <button
                 type="button"
                 onClick={onClose}
