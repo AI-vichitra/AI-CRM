@@ -14,6 +14,7 @@ interface CRMTableProps {
   onSearchChange?: (val: string) => void;
   onEdit?: (row: Record<string, any>) => void;
   onDelete?: (row: Record<string, any>) => void;
+  onQuickUpdate?: (row: Record<string, any>, col: string, val: string) => Promise<void>;
   isTenderDashboard?: boolean;
   currentTab?: string;
 }
@@ -153,81 +154,9 @@ const getRowVal = (row: Record<string, any>, colName: string): any => {
   return "";
 };
 
-// Helper to assign distinct, soft, eye-friendly high-contrast pastel colors based on source across the row
-const getSourceRowClasses = (sourceStr: string): string => {
-  const norm = sourceStr.toLowerCase().trim();
-  if (!norm) return "bg-white dark:bg-[#111118] hover:bg-gray-50/80 dark:hover:bg-[rgba(255,255,255,0.03)]";
-  
-  // 1. Internal -> Slate / Gray (#F1F5F9, #334155)
-  if (norm.includes("internal")) {
-    return "bg-[#F1F5F9] dark:bg-[#1E293B]/90 text-[#334155] dark:text-[#CBD5E1] hover:bg-[#E2E8F0] dark:hover:bg-[#334155] border-l-4 border-l-[#64748B] font-medium";
-  }
-  // 2. LinkedIn -> Blue (#DBEAFE, #1D4ED8)
-  if (norm.includes("linkedin")) {
-    return "bg-[#DBEAFE] dark:bg-[#1E3A8A]/90 text-[#1D4ED8] dark:text-[#BFDBFE] hover:bg-[#BFDBFE] dark:hover:bg-[#1E40AF] border-l-4 border-l-[#2563EB] font-medium";
-  }
-  // 3. Website -> Green (#DCFCE7, #15803D)
-  if (norm.includes("website") || norm.includes("web")) {
-    return "bg-[#DCFCE7] dark:bg-[#14532D]/90 text-[#15803D] dark:text-[#BBF7D0] hover:bg-[#BBF7D0] dark:hover:bg-[#166534] border-l-4 border-l-[#16A34A] font-medium";
-  }
-  // 4. Inbound -> Purple (#F3E8FF, #7E22CE)
-  if (norm.includes("inbound")) {
-    return "bg-[#F3E8FF] dark:bg-[#581C87]/90 text-[#7E22CE] dark:text-[#E9D5FF] hover:bg-[#E9D5FF] dark:hover:bg-[#6B21A8] border-l-4 border-l-[#9333EA] font-medium";
-  }
-  // 5. Direct Mail / Mail -> Rose (#FFE4E6, #BE123C)
-  if (norm.includes("direct mail") || norm.includes("mail")) {
-    return "bg-[#FFE4E6] dark:bg-[#881337]/90 text-[#BE123C] dark:text-[#FECDD3] hover:bg-[#FECDD3] dark:hover:bg-[#9F1239] border-l-4 border-l-[#E11D48] font-medium";
-  }
-  // 6. Direct -> Orange (#FFEDD5, #C2410C)
-  if (norm.includes("direct")) {
-    return "bg-[#FFEDD5] dark:bg-[#7C2D12]/90 text-[#C2410C] dark:text-[#FED7AA] hover:bg-[#FED7AA] dark:hover:bg-[#9A3412] border-l-4 border-l-[#EA580C] font-medium";
-  }
-  // 7. Tender -> Warm Gold / Amber (#FEF3C7, #78350F)
-  if (norm.includes("tender")) {
-    return "bg-[#FEF3C7] dark:bg-[#78350F]/90 text-[#78350F] dark:text-[#FDE68A] hover:bg-[#FDE68A] dark:hover:bg-[#92400E] border-l-4 border-l-[#D97706] font-medium";
-  }
-
-  // Dynamic hash fallback for custom sources
-  let hash = 0;
-  for (let i = 0; i < norm.length; i++) {
-    hash = norm.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colorIndex = Math.abs(hash) % 5;
-  const colorClasses = [
-    "bg-[#ECFCCB] dark:bg-[#1B2909]/90 text-[#365314] dark:text-[#D9F99D] hover:bg-[#D9F99D] border-l-4 border-l-[#65A30D] font-medium",
-    "bg-[#CFFAFE] dark:bg-[#082B30]/90 text-[#164E63] dark:text-[#A5F3FC] hover:bg-[#A5F3FC] border-l-4 border-l-[#0891B2] font-medium",
-    "bg-[#FAE8FF] dark:bg-[#340A31]/90 text-[#701A75] dark:text-[#F5D0FE] hover:bg-[#F5D0FE] border-l-4 border-l-[#C026D3] font-medium",
-    "bg-[#FEF9C3] dark:bg-[#322D08]/90 text-[#713F12] dark:text-[#FEF08A] hover:bg-[#FEF08A] border-l-4 border-l-[#CA8A04] font-medium",
-    "bg-[#EDE9FE] dark:bg-[#201548]/90 text-[#4C1D95] dark:text-[#DDD6FE] hover:bg-[#DDD6FE] border-l-4 border-l-[#7C3AED] font-medium",
-  ];
-  return colorClasses[colorIndex];
-};
-
-// Helper to retrieve color block styling for the Source Legend bar
-const getLegendColor = (sourceStr: string) => {
-  const norm = sourceStr.toLowerCase().trim();
-  if (norm.includes("internal")) {
-    return { name: sourceStr, dot: "bg-[#64748B]", pill: "bg-[#F1F5F9] dark:bg-[#1E293B]/90 text-[#334155] dark:text-[#CBD5E1] border-[#E2E8F0] dark:border-[#64748B]/40" };
-  }
-  if (norm.includes("linkedin")) {
-    return { name: sourceStr, dot: "bg-[#2563EB]", pill: "bg-[#DBEAFE] dark:bg-[#1E3A8A]/90 text-[#1D4ED8] dark:text-[#BFDBFE] border-[#BFDBFE] dark:border-[#2563EB]/40" };
-  }
-  if (norm.includes("website") || norm.includes("web")) {
-    return { name: sourceStr, dot: "bg-[#16A34A]", pill: "bg-[#DCFCE7] dark:bg-[#14532D]/90 text-[#15803D] dark:text-[#BBF7D0] border-[#BBF7D0] dark:border-[#16A34A]/40" };
-  }
-  if (norm.includes("inbound")) {
-    return { name: sourceStr, dot: "bg-[#9333EA]", pill: "bg-[#F3E8FF] dark:bg-[#581C87]/90 text-[#7E22CE] dark:text-[#E9D5FF] border-[#E9D5FF] dark:border-[#9333EA]/40" };
-  }
-  if (norm.includes("direct mail") || norm.includes("mail")) {
-    return { name: sourceStr, dot: "bg-[#E11D48]", pill: "bg-[#FFE4E6] dark:bg-[#881337]/90 text-[#BE123C] dark:text-[#FECDD3] border-[#FECDD3] dark:border-[#E11D48]/40" };
-  }
-  if (norm.includes("direct")) {
-    return { name: sourceStr, dot: "bg-[#EA580C]", pill: "bg-[#FFEDD5] dark:bg-[#7C2D12]/90 text-[#C2410C] dark:text-[#FED7AA] border-[#FED7AA] dark:border-[#EA580C]/40" };
-  }
-  if (norm.includes("tender")) {
-    return { name: sourceStr, dot: "bg-[#D97706]", pill: "bg-[#FEF3C7] dark:bg-[#78350F]/90 text-[#78350F] dark:text-[#FDE68A] border-[#FDE68A] dark:border-[#D97706]/40" };
-  }
-  return { name: sourceStr, dot: "bg-[#0284C7]", pill: "bg-sky-50 dark:bg-sky-950/80 text-sky-900 dark:text-sky-200 border-sky-200 dark:border-sky-800/40" };
+// Clean uniform row styling without color differentiation across leads
+const getSourceRowClasses = (_sourceStr: string): string => {
+  return "bg-white dark:bg-[#111118] hover:bg-gray-50/80 dark:hover:bg-[rgba(255,255,255,0.03)]";
 };
 
 // Helper to retrieve row status value
@@ -245,23 +174,6 @@ const getRowStatus = (row: Record<string, any>): string => {
   return "";
 };
 
-// Helper to retrieve status glowing dot styling
-const getStatusDotClasses = (statusStr: string): string => {
-  const norm = statusStr.toLowerCase().trim();
-  if (norm === "hot") return "bg-[#FF1744] shadow-[0_0_12px_#FF1744] animate-[pulse_0.8s_ease-in-out_infinite] scale-125";
-  if (norm === "warm") return "bg-[#FFD600] shadow-[0_0_8px_#FFD600]";
-  if (norm === "cold") return "bg-[#00E5FF] shadow-[0_0_8px_#00E5FF]";
-  if (norm === "discovery") return "bg-[#AA00FF] shadow-[0_0_8px_#AA00FF]";
-  if (["won", "closed won", "converted", "completed", "success"].some(x => norm.includes(x))) return "bg-[#00E676] shadow-[0_0_8px_#00E676]";
-  if (["dead", "lost"].some(x => norm.includes(x))) return "bg-[#424242] shadow-[0_0_8px_#424242]";
-  if (norm === "lead") return "bg-gray-400 shadow-[0_0_8px_rgba(156,163,175,0.8)]";
-  if (norm === "proposal sent" || norm === "proposal") return "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]";
-  if (norm === "portfolio sent" || norm === "portfolio") return "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]";
-  if (norm === "tender lead" || norm === "tender") return "bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]";
-  if (!norm) return "";
-  return "bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.8)]";
-};
-
 export default function CRMTable({
   headers,
   rows,
@@ -272,11 +184,40 @@ export default function CRMTable({
   onSearchChange,
   onEdit,
   onDelete,
+  onQuickUpdate,
   isTenderDashboard,
   currentTab,
 }: CRMTableProps) {
   const [localSearchTerm, setLocalSearchTerm] = useState("");
   const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const [optimisticValues, setOptimisticValues] = useState<Record<string, string>>({});
+
+  const handleDropdownChange = async (row: Record<string, any>, col: string, newValue: string) => {
+    const rowNum = row._row_num;
+    const optKey = `${rowNum}_${col}`;
+    setOptimisticValues(prev => ({ ...prev, [optKey]: newValue }));
+    if (onQuickUpdate) {
+      try {
+        await onQuickUpdate(row, col, newValue);
+      } catch (err) {
+        // Rollback optimistic update on failure
+        setOptimisticValues(prev => {
+          const next = { ...prev };
+          delete next[optKey];
+          return next;
+        });
+      }
+    }
+  };
+
+  const getEffectiveVal = (row: Record<string, any>, col: string) => {
+    const rowNum = row._row_num;
+    const optKey = `${rowNum}_${col}`;
+    if (optimisticValues[optKey] !== undefined) {
+      return optimisticValues[optKey];
+    }
+    return String(getRowVal(row, col) ?? "");
+  };
 
   const isNumericColumn = (colName: string) => {
     const norm = colName.toLowerCase();
@@ -316,7 +257,9 @@ export default function CRMTable({
   }, [activeSearch, sortColumn, sortDirection, selectedType, selectedStatus, selectedSource]);
 
   // Determine active columns and order
-  const displayCols = columnOrder.length > 0 ? columnOrder : [...headers];
+  const displayCols = (columnOrder.length > 0 ? columnOrder : [...headers]).filter(
+    (col) => col !== "Lead ID" && col.toLowerCase() !== "lead id"
+  );
   const activeColsRaw = displayCols.filter((col) => {
     if (visibleColumns.length === 0) return headers.includes(col);
     // Show if it's explicitly visible, or if it's a new column not yet present in columnOrder config
@@ -325,23 +268,26 @@ export default function CRMTable({
 
   // Include missing headers that aren't in columnOrder yet
   headers.forEach((h) => {
-    if (!displayCols.includes(h)) {
+    if (h !== "Lead ID" && h.toLowerCase() !== "lead id" && !displayCols.includes(h)) {
       displayCols.push(h);
       activeColsRaw.push(h); // Make it visible by default since it is brand new
     }
   });
 
-  // Inject "Lead ID" at the very beginning of the active columns list (filtering out any duplicates)
-  let activeCols = ["Lead ID", ...activeColsRaw.filter((col) => col !== "Lead ID")];
+  // Clean active columns and ensure Date is first if present
+  const cleanedCols = activeColsRaw.filter((col) => col !== "Lead ID" && col.toLowerCase() !== "lead id");
+  let activeCols = cleanedCols.includes("Date")
+    ? ["Date", ...cleanedCols.filter((col) => col !== "Date")]
+    : cleanedCols;
   
   // Check if we are on Active Leads tab (default tab in dashboard) or Internal Leads tab
   const isActiveLeadsTab = !isTenderDashboard && (currentTab === "active_leads" || currentTab === "dashboard" || !currentTab);
   const isInternalLeadsTab = currentTab === "internal_leads";
 
   if (isActiveLeadsTab || isInternalLeadsTab) {
-    // Strictly display ONLY the 7 requested columns in this exact order:
-    // Lead ID, Date, Company Name, Requirement, Stage, Status, Cog POC
-    activeCols = ["Lead ID", "Date", "Company", "Requirement", "Stage", "Status", "Cog POC"];
+    // Strictly display ONLY the requested columns in this exact order with Date first:
+    // Date, Company Name, Requirement, Stage, Status, Cog POC
+    activeCols = ["Date", "Company", "Requirement", "Stage", "Status", "Cog POC"];
   } else if (isTenderDashboard) {
     // For Tender Dashboard, remove specific columns
     activeCols = activeCols.filter(col => {
@@ -371,10 +317,9 @@ export default function CRMTable({
 
   // Filter rows based on search and selected options
   const filteredRows = rows.filter((row) => {
-    const leadId = getLeadId(row).toLowerCase();
     const matchesSearch = Object.values(row).some((val) =>
       String(val).toLowerCase().includes(activeSearch.toLowerCase())
-    ) || leadId.includes(activeSearch.toLowerCase());
+    );
 
     let matchesType = true;
     if (typeColumn && selectedType !== "All") {
@@ -402,8 +347,8 @@ export default function CRMTable({
   const sortedRows = [...filteredRows];
   if (sortColumn) {
     sortedRows.sort((a, b) => {
-      let valA = sortColumn === "Lead ID" ? getLeadId(a) : (getRowVal(a, sortColumn) ?? "");
-      let valB = sortColumn === "Lead ID" ? getLeadId(b) : (getRowVal(b, sortColumn) ?? "");
+      let valA = getRowVal(a, sortColumn) ?? "";
+      let valB = getRowVal(b, sortColumn) ?? "";
       
       const numA = parseFloat(String(valA).replace(/[^0-9.-]/g, ""));
       const numB = parseFloat(String(valB).replace(/[^0-9.-]/g, ""));
@@ -424,135 +369,28 @@ export default function CRMTable({
   const currentRows = sortedRows.slice(indexOfFirstRow, indexOfLastRow);
   const totalPages = Math.ceil(sortedRows.length / rowsPerPage);
 
-  // Deduplicate and extract unique sources across all rows case-insensitively
-  const sourceMap = new Map<string, string>();
-  rows.forEach(r => {
-    const s = getRowSource(r).trim();
-    if (!s) return;
-    const lower = s.toLowerCase();
-    if (!sourceMap.has(lower)) {
-      let display = s;
-      if (lower === "linkedin") display = "LinkedIn";
-      else if (lower === "website") display = "Website";
-      else if (lower === "inbound") display = "Inbound";
-      else if (lower === "internal") display = "Internal";
-      else if (lower === "direct") display = "Direct";
-      else if (lower === "dm") display = "DM";
-      else if (lower === "tender") display = "Tender";
-      else display = s.charAt(0).toUpperCase() + s.slice(1);
-      sourceMap.set(lower, display);
-    }
-  });
-  const activeSources = sourceMap.size > 0 
-    ? Array.from(sourceMap.values())
-    : ["Website", "LinkedIn", "Internal", "Inbound", "Direct", "DM", "Tender"];
-
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-[rgba(255,255,255,0.06)] bg-white dark:bg-[#111118] overflow-hidden shadow-xl transition-colors duration-150">
       {/* Table Action Bar */}
       <div className="px-5 py-4 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Left: Section Title & Interactive Filter Palettes */}
-        <div className="flex flex-col gap-2 min-w-0">
-          <div className="flex items-center gap-3">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white font-sans tracking-tight">
-              Campaign Performance
-            </h3>
-            {(selectedSource !== "All" || selectedStatus !== "All" || selectedType !== "All") && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedSource("All");
-                  setSelectedStatus("All");
-                  setSelectedType("All");
-                }}
-                className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors cursor-pointer border border-rose-200 dark:border-rose-900/40"
-              >
-                Reset All Filters
-              </button>
-            )}
-          </div>
-          
-          {/* Interactive Source Palette Filter Buttons */}
-          <div className="flex items-center flex-wrap gap-1.5 pt-0.5">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-[#888899] mr-1">
-              Source Palette:
-            </span>
-            {activeSources.map(src => {
-              const item = getLegendColor(src);
-              const isSelected = selectedSource.toLowerCase() === src.toLowerCase();
-              return (
-                <button
-                  type="button"
-                  key={src}
-                  onClick={() => setSelectedSource(prev => prev.toLowerCase() === src.toLowerCase() ? "All" : src)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer shadow-xs ${item.pill} ${
-                    isSelected
-                      ? "ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-[#111118] font-bold scale-105 shadow-md brightness-105"
-                      : selectedSource !== "All"
-                      ? "opacity-45 hover:opacity-100 hover:scale-102"
-                      : "hover:scale-102 hover:shadow-xs"
-                  }`}
-                  title={isSelected ? `Filtering by ${src}. Click to clear filter.` : `Click to filter by ${src}`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${item.dot} shadow-xs shrink-0`} />
-                  <span>{src}</span>
-                  {isSelected && (
-                    <span className="ml-0.5 text-[10px] opacity-80 font-mono">✕</span>
-                  )}
-                </button>
-              );
-            })}
-            {selectedSource !== "All" && (
-              <button
-                type="button"
-                onClick={() => setSelectedSource("All")}
-                className="text-[10px] font-mono text-blue-600 dark:text-blue-400 hover:underline px-1 cursor-pointer"
-              >
-                Clear Source
-              </button>
-            )}
-          </div>
-          
-          {/* Interactive Status Palette Filter Buttons */}
-          <div className="flex items-center flex-wrap gap-1.5 pt-0.5 mt-1">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-[#888899] mr-1">
-              Status Palette:
-            </span>
-            {["Hot", "Warm", "Cold", "Discovery", "Won", "Lost"].map(status => {
-              const dotClass = getStatusDotClasses(status);
-              const isSelected = selectedStatus.toLowerCase() === status.toLowerCase();
-              return (
-                <button
-                  type="button"
-                  key={status}
-                  onClick={() => setSelectedStatus(prev => prev.toLowerCase() === status.toLowerCase() ? "All" : status)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer shadow-xs bg-gray-50 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700/50 ${
-                    isSelected
-                      ? "ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-[#111118] font-bold scale-105 shadow-md bg-blue-50/70 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600"
-                      : selectedStatus !== "All"
-                      ? "opacity-45 hover:opacity-100 hover:scale-102"
-                      : "hover:scale-102 hover:shadow-xs"
-                  }`}
-                  title={isSelected ? `Filtering by ${status}. Click to clear filter.` : `Click to filter by ${status}`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${dotClass} shadow-xs shrink-0`} />
-                  <span>{status}</span>
-                  {isSelected && (
-                    <span className="ml-0.5 text-[10px] opacity-80 font-mono">✕</span>
-                  )}
-                </button>
-              );
-            })}
-            {selectedStatus !== "All" && (
-              <button
-                type="button"
-                onClick={() => setSelectedStatus("All")}
-                className="text-[10px] font-mono text-blue-600 dark:text-blue-400 hover:underline px-1 cursor-pointer"
-              >
-                Clear Status
-              </button>
-            )}
-          </div>
+        {/* Left: Section Title */}
+        <div className="flex items-center gap-3 min-w-0">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white font-sans tracking-tight">
+            Campaign Performance
+          </h3>
+          {(selectedSource !== "All" || selectedStatus !== "All" || selectedType !== "All") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSource("All");
+                setSelectedStatus("All");
+                setSelectedType("All");
+              }}
+              className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors cursor-pointer border border-rose-200 dark:border-rose-900/40"
+            >
+              Reset All Filters
+            </button>
+          )}
         </div>
 
         {/* Right: Controls & Filters */}
@@ -732,7 +570,7 @@ export default function CRMTable({
                     style={{ animationDelay: `${rowIdx * 30}ms` }}
                   >
                   {activeCols.map((col, idx) => {
-                    const cellVal = col === "Lead ID" ? getLeadId(row) : String(getRowVal(row, col) ?? "");
+                    const cellVal = String(getRowVal(row, col) ?? "");
                     const isNo = col.toLowerCase() === "no.";
                     const isCampaign = col.toLowerCase() === "campaign";
                     const isValue = ["value", "amount", "revenue", "estimations", "deal size"].some(x => col.toLowerCase().includes(x));
@@ -758,23 +596,6 @@ export default function CRMTable({
                     
                     // Render formatted cells
                     const renderCellContent = () => {
-                      if (col === "Lead ID") {
-                        const leadStatus = getRowStatus(row);
-                        const statusDotClasses = getStatusDotClasses(leadStatus);
-                        return (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-950 dark:text-white font-mono">
-                              {cellVal}
-                            </span>
-                            {statusDotClasses && (
-                              <span 
-                                className={`w-2 h-2 rounded-full ${statusDotClasses}`} 
-                                title={leadStatus}
-                              />
-                            )}
-                          </div>
-                        );
-                      }
                       if (col.toLowerCase().includes("company")) {
                         const rowSource = getRowSource(row).toLowerCase();
                         const isWebsite = rowSource.includes("website") || rowSource.includes("web");
@@ -808,9 +629,9 @@ export default function CRMTable({
                         );
                       }
                       
-                      const colLower = col.toLowerCase();
-                      const isStatus = colLower.includes("status");
-                      const isStage = colLower.includes("stage");
+                      const colLower = col.toLowerCase().trim();
+                      const isStatus = colLower === "status" || colLower.includes("status");
+                      const isStage = colLower === "stage" || colLower.includes("stage");
                       const isType = colLower.includes("type");
                       const isSource = colLower.includes("source");
                       const isDate = colLower.includes("date") || colLower.includes("deadline") || colLower.includes("due");
@@ -830,37 +651,72 @@ export default function CRMTable({
                           </span>
                         );
                       }
-                      
-                      // Render statuses or stages as badges only if the value is short (e.g., standard status keywords)
-                      if ((isStatus || isStage) && cellVal.trim() !== "" && cellVal.length <= 20) {
-                        const valLower = cellVal.toLowerCase().trim();
-                        let badgeClass = "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-800/80 dark:text-gray-300 dark:border-gray-700/50";
-                        
-                        if (valLower === "hot") {
-                          badgeClass = "bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/50";
-                        } else if (valLower === "warm") {
-                          badgeClass = "bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20";
-                        } else if (valLower === "cold") {
-                          badgeClass = "bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20";
-                        } else if (valLower === "discovery") {
-                          badgeClass = "bg-sky-50 text-sky-600 border border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20";
-                        } else if (valLower === "lead") {
-                          badgeClass = "bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-850 dark:text-gray-400 dark:border-gray-700/40";
-                        } else if (valLower === "proposal sent" || valLower === "proposal") {
-                          badgeClass = "bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-500/10 dark:text-blue-450 dark:border-blue-500/20";
-                        } else if (valLower === "portfolio sent" || valLower === "portfolio") {
-                          badgeClass = "bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-500/10 dark:text-amber-450 dark:border-amber-500/20";
-                        } else if (valLower === "tender lead" || valLower === "tender") {
-                          badgeClass = "bg-yellow-55 text-yellow-800 border border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-450 dark:border-yellow-500/20";
-                        } else if (["won", "converted", "completed", "success"].some(x => valLower.includes(x))) {
-                          badgeClass = "bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-500/10 dark:text-[#3cd395] dark:border-emerald-500/20";
-                        } else if (["dead", "lost"].some(x => valLower.includes(x))) {
-                          badgeClass = "bg-red-50 text-red-700 border border-red-100 dark:bg-red-500/10 dark:text-red-450 dark:border-red-500/20";
-                        }
+
+                      // Interactive Stage dropdown (Image 3)
+                      if (isStage) {
+                        const effectiveVal = getEffectiveVal(row, col).trim();
+                        const stageOptions = [
+                          "Lead",
+                          "Contacted",
+                          "Proposal sent",
+                          "Proposal to be Sent",
+                          "Negotiation",
+                          "Won",
+                          "Lost",
+                        ];
+                        const matchedOpt = stageOptions.find(o => o.toLowerCase() === effectiveVal.toLowerCase());
+                        const selectVal = matchedOpt || effectiveVal;
+                        const hasCustom = effectiveVal !== "" && !matchedOpt;
+
                         return (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold leading-none ${badgeClass}`}>
-                            {cellVal}
-                          </span>
+                          <select
+                            value={selectVal}
+                            onChange={(e) => handleDropdownChange(row, col, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full min-w-[130px] max-w-[175px] bg-white dark:bg-[#161622] text-gray-800 dark:text-gray-200 border border-gray-250 dark:border-white/10 rounded-lg px-2.5 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs hover:border-gray-400 dark:hover:border-white/20 transition-all"
+                          >
+                            <option value="">-- Select Stage --</option>
+                            {stageOptions.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                            {hasCustom && (
+                              <option value={effectiveVal}>{effectiveVal}</option>
+                            )}
+                          </select>
+                        );
+                      }
+
+                      // Interactive Status dropdown (Image 4)
+                      if (isStatus) {
+                        const effectiveVal = getEffectiveVal(row, col).trim();
+                        const statusOptions = [
+                          "Hot",
+                          "Warm",
+                          "Cold",
+                        ];
+                        const matchedOpt = statusOptions.find(o => o.toLowerCase() === effectiveVal.toLowerCase());
+                        const selectVal = matchedOpt || effectiveVal;
+                        const hasCustom = effectiveVal !== "" && !matchedOpt;
+
+                        return (
+                          <select
+                            value={selectVal}
+                            onChange={(e) => handleDropdownChange(row, col, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full min-w-[120px] max-w-[155px] bg-white dark:bg-[#161622] text-gray-800 dark:text-gray-200 border border-gray-250 dark:border-white/10 rounded-lg px-2.5 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs hover:border-gray-400 dark:hover:border-white/20 transition-all"
+                          >
+                            <option value="">-- Select Status --</option>
+                            {statusOptions.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                            {hasCustom && (
+                              <option value={effectiveVal}>{effectiveVal}</option>
+                            )}
+                          </select>
                         );
                       }
                       
@@ -1098,9 +954,6 @@ export default function CRMTable({
                       <h3 className="text-lg font-bold text-gray-900 dark:text-white font-sans">
                         {companyName}
                       </h3>
-                      <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40">
-                        {leadId}
-                      </span>
                       {sNo && (
                         <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300 border border-gray-200 dark:border-white/10">
                           S. No. {sNo}

@@ -9,6 +9,7 @@ import GraphWidget from "../../components/dashboard/GraphWidget";
 import GraphBuilder from "../../components/dashboard/GraphBuilder";
 import EmptyState from "../../components/dashboard/EmptyState";
 import LeadFormModal from "../../components/dashboard/LeadFormModal";
+import ActionConversationModal from "../../components/dashboard/ActionConversationModal";
 import RevenueAnalysisWidget from "../../components/dashboard/RevenueAnalysisWidget";
 import DataPlatformView from "../../components/dashboard/DataPlatformView";
 import ProposalTrackerView from "../../components/dashboard/ProposalTrackerView";
@@ -107,11 +108,16 @@ function DashboardContent() {
   const [showAlertPanel, setShowAlertPanel] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState("All");
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [selectedKpiTab, setSelectedKpiTab] = useState<string>("Total Leads");
 
   // Lead modal states
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Record<string, any> | null>(null);
   const [modalTitle, setModalTitle] = useState("Add New Lead");
+
+  // Action / Conversation modal states
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [selectedActionLead, setSelectedActionLead] = useState<Record<string, any> | null>(null);
 
   async function loadData(showToast = false, bypassCache = false) {
     try {
@@ -150,6 +156,7 @@ function DashboardContent() {
   }
 
   useEffect(() => {
+    setSelectedKpiTab("Total Leads");
     loadData(false, false);
   }, [tab]);
 
@@ -218,9 +225,8 @@ function DashboardContent() {
   };
 
   const handleEditLead = (row: Record<string, any>) => {
-    setSelectedLead(row);
-    setModalTitle("Edit Lead");
-    setIsLeadModalOpen(true);
+    setSelectedActionLead(row);
+    setIsActionModalOpen(true);
   };
 
   const handleDeleteLead = async (row: Record<string, any>) => {
@@ -251,7 +257,8 @@ function DashboardContent() {
       setRefreshing(true);
       const targetRowNum = leadDataInput._row_num || (selectedLead && selectedLead._row_num);
       if (targetRowNum) {
-        await api.updateLead(targetRowNum, leadDataInput);
+        const mergedData = selectedLead ? { ...selectedLead, ...leadDataInput } : leadDataInput;
+        await api.updateLead(targetRowNum, mergedData);
         toast.success("Lead updated successfully");
       } else {
         await api.addLead(leadDataInput);
@@ -282,6 +289,23 @@ function DashboardContent() {
       toast.error(err.message || "Failed to update proposal stage");
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleQuickUpdateField = async (row: Record<string, any>, col: string, newValue: string) => {
+    try {
+      const rowNum = row._row_num;
+      if (!rowNum) {
+        toast.error("Invalid lead row index");
+        return;
+      }
+      const updatedRow = { ...row, [col]: newValue };
+      await api.updateLead(rowNum, updatedRow);
+      toast.success(`${col} updated to "${newValue || "None"}"`);
+      await loadData(false, true);
+    } catch (err: any) {
+      toast.error(err.message || `Failed to update ${col}`);
+      throw err;
     }
   };
 
@@ -440,129 +464,77 @@ function DashboardContent() {
     };
   }, [sheetData, includeArchived]);
 
-  // Calculate display KPIs dynamically based on filtered rows
+  // Helper to categorize lead rows
+  const getLeadCategory = (row: Record<string, any>): "won" | "lost" | "active" => {
+    const stgVals: string[] = [];
+    for (const [k, v] of Object.entries(row)) {
+      const kl = k.toLowerCase().trim();
+      if (kl === "stage" || kl.includes("stage") || kl === "status" || kl.includes("status")) {
+        const val = String(v || "").toLowerCase().trim();
+        if (val) stgVals.push(val);
+      }
+    }
+
+    let isWon = false;
+    let isLost = false;
+    let isActive = false;
+
+    stgVals.forEach(stg => {
+      if (["won", "closed won", "converted", "completed", "hired", "success"].some(x => stg.includes(x))) {
+        isWon = true;
+      }
+      if (["lost", "closed lost", "dead", "cold", "dropped", "not qualified", "spam"].some(x => stg.includes(x))) {
+        isLost = true;
+      }
+      if (["proposal", "negotiation", "active", "discovery", "follow-up", "warm", "hot", "contacted", "lead", "meeting", "portfolio"].some(x => stg.includes(x))) {
+        isActive = true;
+      }
+    });
+
+    if (isWon) return "won";
+    if (isLost) return "lost";
+    if (isActive) return "active";
+    return "active";
+  };
+
+  // Calculate display KPIs dynamically based on filtered rows (strictly 4 tabs: Total Leads, Active Leads, Closed Won, Closed Lost)
   const displayKpis = React.useMemo(() => {
     if (!sheetData) return [];
     const rows = filteredRows;
     const totalRows = rows.length;
 
-    const kpisList = [
-      { label: "Total Leads", value: totalRows.toLocaleString("en-IN"), delta: "+12%" }
-    ];
-
-    let totalValue = 0;
-    const uniqueCompanies = new Set<string>();
-    const companyCol = sheetData.headers.find(h => h.toLowerCase() === "company" || h.toLowerCase().includes("company"));
-
-    rows.forEach(row => {
-      const statusColName = sheetData.headers.find(h => h.toLowerCase() === "status" || h.toLowerCase().includes("status")) || "";
-      const stageColName = sheetData.headers.find(h => h.toLowerCase().includes("stage")) || "";
-      
-      let isWonOrLost = false;
-      const stgVals: string[] = [];
-      if (stageColName) stgVals.push(String(row[stageColName] || "").toLowerCase());
-      if (statusColName) {
-        for (const [k, v] of Object.entries(row)) {
-          if (k.toLowerCase() === "status") {
-            stgVals.push(String(v).toLowerCase());
-          }
-        }
-      }
-      if (row["Lead"]) stgVals.push(String(row["Lead"]).toLowerCase());
-      if (row["Lead Status"]) stgVals.push(String(row["Lead Status"]).toLowerCase());
-
-      stgVals.forEach(stg => {
-        if (["won", "closed won", "converted", "completed", "hired", "success", "lost", "dead", "lost lead", "dead lead", "cold"].some(x => stg.includes(x))) {
-          isWonOrLost = true;
-        }
-      });
-
-      if (valCol) {
-        const rawVal = row[valCol];
-        let parsed = 0;
-        if (rawVal) {
-          const baseStr = String(rawVal).split("(")[0].trim();
-          if (baseStr.includes("+")) {
-            parsed = baseStr.split("+").reduce((acc, part) => {
-              const clean = part.replace(/[^0-9.-]/g, "").trim();
-              const num = parseFloat(clean);
-              return acc + (isNaN(num) ? 0 : num);
-            }, 0);
-          } else {
-            const clean = baseStr.replace(/[^0-9.-]/g, "").trim();
-            parsed = parseFloat(clean) || 0;
-          }
-        }
-        if (parsed > 0 && !isWonOrLost) {
-          totalValue += parsed;
-        }
-      }
-      if (companyCol) {
-        const compName = String(row[companyCol] || "").trim();
-        if (compName) {
-          uniqueCompanies.add(compName);
-        }
-      }
-    });
-
-    if (isInternalLeadsTab && valCol) {
-      const formattedVal = totalValue % 1 !== 0 
-        ? `₹${totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-        : `₹${totalValue.toLocaleString("en-IN")}`;
-      kpisList.push({ label: "Pipeline Value", value: formattedVal, delta: "+8%" });
-    } else {
-      kpisList.push({ label: "Unique Companies", value: uniqueCompanies.size.toLocaleString("en-IN"), delta: "+5%" });
-    }
-
     let activeCount = 0;
     let closedWonCount = 0;
-    let coldCount = 0;
-    const statusColName = sheetData.headers.find(h => h.toLowerCase() === "status" || h.toLowerCase().includes("status")) || "";
-    const stageColName = sheetData.headers.find(h => h.toLowerCase().includes("stage")) || "";
+    let closedLostCount = 0;
 
     rows.forEach(row => {
-      const stgVals: string[] = [];
-      if (stageColName) stgVals.push(String(row[stageColName] || "").toLowerCase());
-      if (statusColName) {
-        for (const [k, v] of Object.entries(row)) {
-          if (k.toLowerCase() === "status") {
-            stgVals.push(String(v).toLowerCase());
-          }
-        }
-      }
-      if (row["Lead"]) stgVals.push(String(row["Lead"]).toLowerCase());
-      if (row["Lead Status"]) stgVals.push(String(row["Lead Status"]).toLowerCase());
-
-      let isWon = false;
-      let isActive = false;
-      let isCold = false;
-      stgVals.forEach(stg => {
-        if (["won", "closed won", "converted", "completed", "hired", "success"].some(x => stg.includes(x))) {
-          isWon = true;
-        }
-        if (["cold", "dead", "lost"].some(x => stg.includes(x))) {
-          isCold = true;
-        }
-        if (["proposal", "negotiation", "active", "discovery", "follow-up", "warm", "hot", "contacted", "lead"].some(x => stg.includes(x))) {
-          isActive = true;
-        }
-      });
-
-      if (isWon) {
-        closedWonCount++;
-      } else if (isCold) {
-        coldCount++;
-      } else if (isActive) {
-        activeCount++;
-      }
+      const cat = getLeadCategory(row);
+      if (cat === "won") closedWonCount++;
+      else if (cat === "lost") closedLostCount++;
+      else activeCount++;
     });
 
-    kpisList.push({ label: "Active Leads", value: activeCount.toLocaleString("en-IN"), delta: "+4%" });
-    kpisList.push({ label: "Closed Won", value: closedWonCount.toLocaleString("en-IN"), delta: "+0%" });
-    kpisList.push({ label: "Cold Leads", value: coldCount.toLocaleString("en-IN"), delta: "+0%" });
+    return [
+      { label: "Total Leads", value: totalRows.toLocaleString("en-IN"), delta: "+12%" },
+      { label: "Active Leads", value: activeCount.toLocaleString("en-IN"), delta: "+4%" },
+      { label: "Closed Won", value: closedWonCount.toLocaleString("en-IN"), delta: "+0%" },
+      { label: "Closed Lost", value: closedLostCount.toLocaleString("en-IN"), delta: "+0%" }
+    ];
+  }, [filteredRows, sheetData]);
 
-    return kpisList;
-  }, [filteredRows, sheetData, valCol]);
+  // Table rows filtered by the selected KPI tab
+  const tableRows = React.useMemo(() => {
+    if (selectedKpiTab === "Active Leads") {
+      return filteredRows.filter(r => getLeadCategory(r) === "active");
+    }
+    if (selectedKpiTab === "Closed Won") {
+      return filteredRows.filter(r => getLeadCategory(r) === "won");
+    }
+    if (selectedKpiTab === "Closed Lost") {
+      return filteredRows.filter(r => getLeadCategory(r) === "lost");
+    }
+    return filteredRows;
+  }, [filteredRows, selectedKpiTab]);
 
   const defaultLineGraph: GraphConfig = {
     id: "default-line",
@@ -840,12 +812,6 @@ function DashboardContent() {
                     + Add Lead
                   </button>
 
-                  <button
-                    onClick={() => setIsBuilderOpen(true)}
-                    className="px-3 py-1.5 bg-[#1D9E75] hover:bg-[#198763] text-white rounded-lg text-xs font-sans font-semibold transition-all cursor-pointer shadow-[0_0_12px_rgba(29,158,117,0.15)]"
-                  >
-                    + Add Widget
-                  </button>
 
                   <button
                     onClick={handleRefresh}
@@ -876,58 +842,39 @@ function DashboardContent() {
               )}
             </div>
           </div>
-          {/* Row 1: Top Metric KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-            {Array.from({ length: 5 }).map((_, index) => {
-              const kpi = displayKpis[index];
-
-              if (kpi) {
-                return (
-                  <MetricCard
-                    key={kpi.label}
-                    label={kpi.label}
-                    value={String(kpi.value)}
-                    delta={kpi.delta}
-                    index={index}
-                  />
-                );
-              } else {
-                return (
-                  <div key={index} className="h-full min-h-[100px] flex items-center justify-center text-xs text-gray-400 dark:text-[#555566] font-mono border border-gray-200 dark:border-[rgba(255,255,255,0.06)] bg-white dark:bg-[#111118] rounded-2xl shadow-sm">
-                    Empty Slot
-                  </div>
-                );
-              }
+          {/* Row 1: Top Metric KPI Cards (4 tabs: Total Leads, Active Leads, Closed Won, Closed Lost) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {displayKpis.map((kpi, index) => {
+              const isSelected = selectedKpiTab === kpi.label;
+              return (
+                <MetricCard
+                  key={kpi.label}
+                  label={kpi.label}
+                  value={String(kpi.value)}
+                  delta={kpi.delta}
+                  index={index}
+                  isSelected={isSelected}
+                  onClick={() => {
+                    setSelectedKpiTab(prev => prev === kpi.label ? "Total Leads" : kpi.label);
+                  }}
+                />
+              );
             })}
           </div>
 
-          {/* Row 2: Visual Insights & Status Donut Chart */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-            <div className="lg:col-span-2 min-w-0 flex flex-col">
-              {filteredSheetData && (
-                <RevenueAnalysisWidget sheetData={filteredSheetData} />
-              )}
+          {/* Row 2: Revenue Analysis & Pipeline Breakdown (One Straight Line) */}
+          {filteredSheetData && (
+            <div className="w-full">
+              <RevenueAnalysisWidget sheetData={filteredSheetData} />
             </div>
-
-            {/* Donut Chart: Lead Status Breakdown */}
-            <div className="lg:col-span-1 min-w-0 flex flex-col">
-              {sheetData && (
-                <GraphWidget
-                  graph={primaryPieGraph}
-                  rows={filteredRows}
-                  onDelete={primaryPieGraph.id !== "default-pie" ? handleDeleteGraph : undefined}
-                  height={260}
-                />
-              )}
-            </div>
-          </div>
+          )}
 
           {/* Row 3: Campaign Performance Table (Full Width) */}
           <div className="w-full">
             {sheetData && (
               <CRMTable
                 headers={sheetData.headers}
-                rows={filteredRows}
+                rows={tableRows}
                 visibleColumns={summary?.visible_columns || []}
                 columnOrder={summary?.column_order || []}
                 onSaveConfig={handleSaveTableConfig}
@@ -935,6 +882,7 @@ function DashboardContent() {
                 onSearchChange={setSearchTerm}
                 onEdit={!sheetData?.is_mock ? handleEditLead : undefined}
                 onDelete={!sheetData?.is_mock ? handleDeleteLead : undefined}
+                onQuickUpdate={!sheetData?.is_mock ? handleQuickUpdateField : undefined}
                 isTenderDashboard={isTendersTab}
                 currentTab={tab}
               />
@@ -983,6 +931,13 @@ function DashboardContent() {
               mandatoryColumns={summary?.mandatory_columns || []}
             />
           )}
+
+          {/* Action Conversation Modal (triggered by clicking edit on any lead row) */}
+          <ActionConversationModal
+            isOpen={isActionModalOpen}
+            onClose={() => setIsActionModalOpen(false)}
+            lead={selectedActionLead}
+          />
         </div>
       )}
     </DashboardShell>

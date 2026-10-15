@@ -4,7 +4,7 @@ socket.setdefaulttimeout(15.0) # Prevent Google API from hanging the threadpool
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import sheets, config_router, dashboard
+from app.routers import sheets, config_router, dashboard, conversations
 
 app = FastAPI(title="CRM Dashboard API", version="1.0.0")
 
@@ -16,9 +16,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(sheets.router,        prefix="/api/sheets",    tags=["Sheets"])
-app.include_router(config_router.router, prefix="/api/config",    tags=["Config"])
-app.include_router(dashboard.router,     prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(sheets.router,        prefix="/api/sheets",        tags=["Sheets"])
+app.include_router(config_router.router, prefix="/api/config",        tags=["Config"])
+app.include_router(dashboard.router,     prefix="/api/dashboard",     tags=["Dashboard"])
+app.include_router(conversations.router, prefix="/api/conversations", tags=["Conversations"])
 
 import asyncio
 from app.services.alert_service import check_and_send_alerts

@@ -42,3 +42,13 @@ export interface DashboardSummary {
   graphs: GraphConfig[];
   mandatory_columns?: string[];
 }
+
+export interface Conversation {
+  id: number;
+  lead_id: string;
+  lead_key?: string;
+  date: string;
+  conversation_type: "Call" | "WhatsApp" | "Email" | "Meeting" | string;
+  message: string;
+  created_at: string;
+}

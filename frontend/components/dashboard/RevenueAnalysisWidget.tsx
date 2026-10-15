@@ -253,135 +253,244 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-[rgba(255,255,255,0.06)] bg-white dark:bg-[#111118] p-5 shadow-xl transition-colors duration-150 flex flex-col md:flex-row gap-6 w-full h-full">
-      {/* Left side: Metrics Cards */}
-      <div className="flex flex-col gap-3.5 w-full md:w-72 shrink-0 justify-between">
-        {/* Metric 1 */}
-        <div className="flex-1 p-5 rounded-xl border border-gray-150 dark:border-white/5 bg-gray-50/30 dark:bg-[#161622]/40 flex flex-col justify-between shadow-sm min-h-[110px]">
-          <span className="text-[11px] font-semibold text-gray-500 dark:text-[#888899] font-sans">
-            {hasRevenueData ? "Total Estimated Revenue" : "Active Pipeline Leads"}
-          </span>
-          <div className="flex items-baseline justify-between mt-2">
-            <span className="text-xl font-bold text-blue-600 dark:text-[#38BDF8] font-sans flex items-center gap-1">
-              {hasRevenueData ? formatCurrency(totalEstimatedRevenue) : `${totalRowsCount} Leads`}
+    <div className="w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
+        {/* Row 1, Col 1: Total Estimated Revenue */}
+        <div className="py-2.5 px-3.5 rounded-2xl border border-gray-200/90 dark:border-white/10 bg-white dark:bg-[#111118] flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-gray-500 dark:text-[#888899] uppercase tracking-wider font-sans truncate">
+              {hasRevenueData ? "TOTAL EST. REVENUE" : "ACTIVE PIPELINE"}
             </span>
-            <span className="text-[10px] font-bold text-blue-500 flex items-center font-mono">
+            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 font-mono px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-500/10 shrink-0">
               Live
             </span>
           </div>
+          <div className="mt-1 flex items-center">
+            <span
+              className="text-sm sm:text-base font-bold text-gray-900 dark:text-white font-sans tracking-tight truncate block"
+              title={hasRevenueData ? formatCurrency(totalEstimatedRevenue) : `${totalRowsCount} Leads`}
+            >
+              {hasRevenueData ? formatCurrency(totalEstimatedRevenue) : `${totalRowsCount} Leads`}
+            </span>
+          </div>
         </div>
 
-        {/* Metric 2 */}
-        <div className="flex-1 p-5 rounded-xl border border-gray-150 dark:border-white/5 bg-gray-50/30 dark:bg-[#161622]/40 flex flex-col justify-between shadow-sm min-h-[110px]">
-          <span className="text-[11px] font-semibold text-gray-500 dark:text-[#888899] font-sans">
-            {hasRevenueData ? "Won Revenue" : "High Intent (Hot + Warm)"}
-          </span>
-          <div className="flex items-baseline justify-between mt-2">
-            <span className="text-xl font-bold font-sans flex items-center gap-1" style={{ color: "#1D9E75" }}>
+        {/* Row 1, Col 2: Hot Leads */}
+        <div className="py-2.5 px-3.5 rounded-2xl border border-red-200/70 dark:border-red-900/30 bg-[#FFF5F5] dark:bg-red-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[#FF1744] shrink-0 animate-[pulse_0.8s_ease-in-out_infinite]" />
+              <span className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">Hot Leads</span>
+            </div>
+            {hotCount > 0 && (
+              <span className="text-xs font-mono text-gray-400 dark:text-[#777788] shrink-0">({hotCount})</span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span
+              className="text-sm sm:text-base font-bold text-gray-900 dark:text-white font-sans tracking-tight truncate shrink-0"
+              title={hasRevenueData ? formatCurrency(hotRevenue) : `${hotCount} Leads`}
+            >
+              {hasRevenueData ? formatCurrency(hotRevenue) : `${hotCount} Leads`}
+            </span>
+            <div className="flex items-center gap-2 flex-1 max-w-[130px]">
+              <div className="w-full bg-gray-200/80 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-[#FF1744] h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${
+                      hasRevenueData
+                        ? totalEstimatedRevenue > 0
+                          ? (hotRevenue / totalEstimatedRevenue) * 100
+                          : 0
+                        : totalRowsCount > 0
+                        ? (hotCount / totalRowsCount) * 100
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              <span className="text-[10px] text-gray-400 dark:text-[#888899] font-mono shrink-0">
+                {hasRevenueData
+                  ? totalEstimatedRevenue > 0
+                    ? ((hotRevenue / totalEstimatedRevenue) * 100).toFixed(1)
+                    : 0
+                  : totalRowsCount > 0
+                  ? ((hotCount / totalRowsCount) * 100).toFixed(1)
+                  : 0}
+                %
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 1, Col 3: Warm Leads */}
+        <div className="py-2.5 px-3.5 rounded-2xl border border-amber-200/70 dark:border-amber-900/30 bg-[#FEFDF0] dark:bg-amber-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[#FFD600] shrink-0" />
+              <span className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">Warm Leads</span>
+            </div>
+            {warmCount > 0 && (
+              <span className="text-xs font-mono text-gray-400 dark:text-[#777788] shrink-0">({warmCount})</span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span
+              className="text-sm sm:text-base font-bold text-gray-900 dark:text-white font-sans tracking-tight truncate shrink-0"
+              title={hasRevenueData ? formatCurrency(warmRevenue) : `${warmCount} Leads`}
+            >
+              {hasRevenueData ? formatCurrency(warmRevenue) : `${warmCount} Leads`}
+            </span>
+            <div className="flex items-center gap-2 flex-1 max-w-[130px]">
+              <div className="w-full bg-gray-200/80 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-[#FFD600] h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${
+                      hasRevenueData
+                        ? totalEstimatedRevenue > 0
+                          ? (warmRevenue / totalEstimatedRevenue) * 100
+                          : 0
+                        : totalRowsCount > 0
+                        ? (warmCount / totalRowsCount) * 100
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              <span className="text-[10px] text-gray-400 dark:text-[#888899] font-mono shrink-0">
+                {hasRevenueData
+                  ? totalEstimatedRevenue > 0
+                    ? ((warmRevenue / totalEstimatedRevenue) * 100).toFixed(1)
+                    : 0
+                  : totalRowsCount > 0
+                  ? ((warmCount / totalRowsCount) * 100).toFixed(1)
+                  : 0}
+                %
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2, Col 1: Won Revenue */}
+        <div className="py-2.5 px-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/30 bg-[#F0FDF4] dark:bg-emerald-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider font-sans truncate">
+              WON REVENUE
+            </span>
+            <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-[#DCFCE7] dark:bg-emerald-500/15 text-[#16A34A] dark:text-[#3CD395] shrink-0">
+              {totalEstimatedRevenue > 0
+                ? `${((wonRevenue / totalEstimatedRevenue) * 100).toFixed(0)}%`
+                : totalRowsCount > 0
+                ? `${Math.round(((hotCount + warmCount) / totalRowsCount) * 100)}%`
+                : "0%"}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center">
+            <span
+              className="text-sm sm:text-base font-bold font-sans tracking-tight text-[#16A34A] dark:text-[#3CD395] truncate block"
+              title={hasRevenueData ? `+${formatCurrency(wonRevenue)}` : `${hotCount + warmCount} Leads`}
+            >
               {hasRevenueData ? `+${formatCurrency(wonRevenue)}` : `${hotCount + warmCount} Leads`}
             </span>
-            <span className="text-[10px] font-bold flex items-center font-mono" style={{ color: "#1D9E75" }}>
-              {totalRowsCount > 0 ? `${Math.round(((hotCount + warmCount) / totalRowsCount) * 100)}%` : "0%"}
-            </span>
           </div>
         </div>
-      </div>
 
-      {/* Right side: Breakdown by Lead Temperature */}
-      <div className="flex-1 min-w-0 flex flex-col justify-center">
-        <h4 className="text-[11px] font-semibold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-sans mb-3.5">
-          {hasRevenueData ? "Revenue Breakdown by Lead Temp" : "Pipeline Breakdown by Lead Temperature"}
-        </h4>
-        <div className="flex flex-col gap-3">
-          {/* Hot leads row */}
-          <div className="p-3 rounded-xl border border-[#FF1744]/20 dark:border-[#FF1744]/10 bg-[#FF1744]/5 flex flex-col gap-1.5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FF1744] shadow-[0_0_8px_#FF1744] animate-[pulse_0.8s_ease-in-out_infinite]" />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Hot Leads</span>
+        {/* Row 2, Col 2: Cold Leads */}
+        <div className="py-2.5 px-3.5 rounded-2xl border border-cyan-200/70 dark:border-cyan-900/30 bg-[#F0FDFA] dark:bg-cyan-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[#00E5FF] shrink-0" />
+              <span className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">Cold Leads</span>
+            </div>
+            {coldCount > 0 && (
+              <span className="text-xs font-mono text-gray-400 dark:text-[#777788] shrink-0">({coldCount})</span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span
+              className="text-sm sm:text-base font-bold text-gray-900 dark:text-white font-sans tracking-tight truncate shrink-0"
+              title={hasRevenueData ? formatCurrency(coldRevenue) : `${coldCount} Leads`}
+            >
+              {hasRevenueData ? formatCurrency(coldRevenue) : `${coldCount} Leads`}
+            </span>
+            <div className="flex items-center gap-2 flex-1 max-w-[130px]">
+              <div className="w-full bg-gray-200/80 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-[#00E5FF] h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${
+                      hasRevenueData
+                        ? totalEstimatedRevenue > 0
+                          ? (coldRevenue / totalEstimatedRevenue) * 100
+                          : 0
+                        : totalRowsCount > 0
+                        ? (coldCount / totalRowsCount) * 100
+                        : 0
+                    }%`,
+                  }}
+                />
               </div>
-              <span className="text-xs font-bold text-[#FF1744]">
-                {hasRevenueData ? formatCurrency(hotRevenue) : `${hotCount} Leads`}
+              <span className="text-[10px] text-gray-400 dark:text-[#888899] font-mono shrink-0">
+                {hasRevenueData
+                  ? totalEstimatedRevenue > 0
+                    ? ((coldRevenue / totalEstimatedRevenue) * 100).toFixed(1)
+                    : 0
+                  : totalRowsCount > 0
+                  ? ((coldCount / totalRowsCount) * 100).toFixed(1)
+                  : 0}
+                %
               </span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-white/5 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#FF1744] h-full rounded-full transition-all duration-500" 
-                style={{ width: `${hasRevenueData ? (totalEstimatedRevenue > 0 ? (hotRevenue / totalEstimatedRevenue) * 100 : 0) : (totalRowsCount > 0 ? (hotCount / totalRowsCount) * 100 : 0)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[10px] text-gray-500 dark:text-[#888899] font-mono">
-              <span>Share of pipeline</span>
-              <span>{hasRevenueData ? (totalEstimatedRevenue > 0 ? ((hotRevenue / totalEstimatedRevenue) * 100).toFixed(1) : 0) : (totalRowsCount > 0 ? ((hotCount / totalRowsCount) * 100).toFixed(1) : 0)}%</span>
             </div>
           </div>
+        </div>
 
-          {/* Warm leads row */}
-          <div className="p-3 rounded-xl border border-[#FFD600]/20 dark:border-[#FFD600]/10 bg-[#FFD600]/5 flex flex-col gap-1.5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FFD600]" />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Warm Leads</span>
-              </div>
-              <span className="text-xs font-bold text-[#FFD600]">
-                {hasRevenueData ? formatCurrency(warmRevenue) : `${warmCount} Leads`}
-              </span>
+        {/* Row 2, Col 3: Discovery Leads */}
+        <div className="py-2.5 px-3.5 rounded-2xl border border-purple-200/70 dark:border-purple-900/30 bg-[#FAF5FF] dark:bg-purple-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[#AA00FF] shrink-0" />
+              <span className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">Discovery Leads</span>
             </div>
-            <div className="w-full bg-gray-200 dark:bg-white/5 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#FFD600] h-full rounded-full transition-all duration-500" 
-                style={{ width: `${hasRevenueData ? (totalEstimatedRevenue > 0 ? (warmRevenue / totalEstimatedRevenue) * 100 : 0) : (totalRowsCount > 0 ? (warmCount / totalRowsCount) * 100 : 0)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[10px] text-gray-500 dark:text-[#888899] font-mono">
-              <span>Share of pipeline</span>
-              <span>{hasRevenueData ? (totalEstimatedRevenue > 0 ? ((warmRevenue / totalEstimatedRevenue) * 100).toFixed(1) : 0) : (totalRowsCount > 0 ? ((warmCount / totalRowsCount) * 100).toFixed(1) : 0)}%</span>
-            </div>
+            {discoveryCount > 0 && (
+              <span className="text-xs font-mono text-gray-400 dark:text-[#777788] shrink-0">({discoveryCount})</span>
+            )}
           </div>
-
-          {/* Cold leads row */}
-          <div className="p-3 rounded-xl border border-[#00E5FF]/20 dark:border-[#00E5FF]/10 bg-[#00E5FF]/5 flex flex-col gap-1.5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF]" />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Cold Leads</span>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span
+              className="text-sm sm:text-base font-bold text-gray-900 dark:text-white font-sans tracking-tight truncate shrink-0"
+              title={hasRevenueData ? formatCurrency(discoveryRevenue) : `${discoveryCount} Leads`}
+            >
+              {hasRevenueData ? formatCurrency(discoveryRevenue) : `${discoveryCount} Leads`}
+            </span>
+            <div className="flex items-center gap-2 flex-1 max-w-[130px]">
+              <div className="w-full bg-gray-200/80 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-[#AA00FF] h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${
+                      hasRevenueData
+                        ? totalEstimatedRevenue > 0
+                          ? (discoveryRevenue / totalEstimatedRevenue) * 100
+                          : 0
+                        : totalRowsCount > 0
+                        ? (discoveryCount / totalRowsCount) * 100
+                        : 0
+                    }%`,
+                  }}
+                />
               </div>
-              <span className="text-xs font-bold text-[#00E5FF]">
-                {hasRevenueData ? formatCurrency(coldRevenue) : `${coldCount} Leads`}
+              <span className="text-[10px] text-gray-400 dark:text-[#888899] font-mono shrink-0">
+                {hasRevenueData
+                  ? totalEstimatedRevenue > 0
+                    ? ((discoveryRevenue / totalEstimatedRevenue) * 100).toFixed(1)
+                    : 0
+                  : totalRowsCount > 0
+                  ? ((discoveryCount / totalRowsCount) * 100).toFixed(1)
+                  : 0}
+                %
               </span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-white/5 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#00E5FF] h-full rounded-full transition-all duration-500" 
-                style={{ width: `${hasRevenueData ? (totalEstimatedRevenue > 0 ? (coldRevenue / totalEstimatedRevenue) * 100 : 0) : (totalRowsCount > 0 ? (coldCount / totalRowsCount) * 100 : 0)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[10px] text-gray-500 dark:text-[#888899] font-mono">
-              <span>Share of pipeline</span>
-              <span>{hasRevenueData ? (totalEstimatedRevenue > 0 ? ((coldRevenue / totalEstimatedRevenue) * 100).toFixed(1) : 0) : (totalRowsCount > 0 ? ((coldCount / totalRowsCount) * 100).toFixed(1) : 0)}%</span>
-            </div>
-          </div>
-
-          {/* Discovery leads row */}
-          <div className="p-3 rounded-xl border border-[#AA00FF]/20 dark:border-[#AA00FF]/10 bg-[#AA00FF]/5 flex flex-col gap-1.5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#AA00FF]" />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Discovery Leads</span>
-              </div>
-              <span className="text-xs font-bold text-[#AA00FF]">
-                {hasRevenueData ? formatCurrency(discoveryRevenue) : `${discoveryCount} Leads`}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-white/5 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#AA00FF] h-full rounded-full transition-all duration-500" 
-                style={{ width: `${hasRevenueData ? (totalEstimatedRevenue > 0 ? (discoveryRevenue / totalEstimatedRevenue) * 100 : 0) : (totalRowsCount > 0 ? (discoveryCount / totalRowsCount) * 100 : 0)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[10px] text-gray-500 dark:text-[#888899] font-mono">
-              <span>Share of pipeline</span>
-              <span>{hasRevenueData ? (totalEstimatedRevenue > 0 ? ((discoveryRevenue / totalEstimatedRevenue) * 100).toFixed(1) : 0) : (totalRowsCount > 0 ? ((discoveryCount / totalRowsCount) * 100).toFixed(1) : 0)}%</span>
             </div>
           </div>
         </div>

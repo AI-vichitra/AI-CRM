@@ -1,4 +1,4 @@
-import { SheetData, Config, DashboardSummary } from "./types";
+import { SheetData, Config, DashboardSummary, Conversation } from "./types";
 
 const BASE = "";
 
@@ -70,5 +70,16 @@ export const api = {
     apiFetch<{ subject: string; html: string; recipients: string[]; is_test_mode: boolean; new_leads_count: number; hot_leads_count: number }>(`/api/dashboard/preview-daily-leads-digest${overrideRecipient ? `?override_recipient=${encodeURIComponent(overrideRecipient)}` : ""}`),
   previewProposalsFollowupAlert: (overrideRecipient?: string) =>
     apiFetch<{ subject: string; html: string; recipients: string[]; is_test_mode: boolean; proposals_today_count: number; followups_due_count: number }>(`/api/dashboard/preview-proposals-followup-alert${overrideRecipient ? `?override_recipient=${encodeURIComponent(overrideRecipient)}` : ""}`),
+  getConversations: (leadId?: string, date?: string) => {
+    const params = new URLSearchParams();
+    if (leadId) params.set("lead_id", leadId);
+    if (date) params.set("date", date);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return apiFetch<Conversation[]>(`/api/conversations/${query}`);
+  },
+  addConversation: (data: { lead_id: string; date: string; conversation_type: string; message: string; lead_key?: string }) =>
+    apiFetch<Conversation>("/api/conversations/", { method: "POST", body: JSON.stringify(data) }),
+  deleteConversation: (id: number) =>
+    apiFetch<{ ok: boolean; id: number }>(`/api/conversations/${id}`, { method: "DELETE" }),
 };
 

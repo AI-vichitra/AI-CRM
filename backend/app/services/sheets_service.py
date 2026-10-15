@@ -282,9 +282,7 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
         else:
             raw_headers = values[0]
             headers = _deduplicate_headers(raw_headers)
-            has_lead_id = "Lead ID" in headers
-            if not has_lead_id:
-                headers = ["Lead ID"] + headers
+            headers = [h for h in headers if h != "Lead ID"]
             
             rows = values[1:]
             normalized = []
@@ -296,8 +294,9 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                 
                 for new_idx, h in enumerate(raw_headers):
                     val = row[new_idx].strip() if new_idx < len(row) else ""
-                    header_key = headers[new_idx + (1 if not has_lead_id else 0)]
-                    row_dict[header_key] = val
+                    if new_idx < len(headers):
+                        header_key = headers[new_idx]
+                        row_dict[header_key] = val
                     if val != "":
                         row_has_data = True
                 
@@ -317,10 +316,6 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                     is_hidden = bool(meta_info.get("hiddenByUser", False) or meta_info.get("hiddenByFilter", False))
                     row_dict["_is_hidden"] = is_hidden
 
-                    # Backfill/inject Lead ID
-                    if not row_dict.get("Lead ID"):
-                        row_dict["Lead ID"] = f"COG-{1000 + row_dict['_row_num']}"
-
                     # Normalize Status <-> Lead and Stage <-> Lead Status across all tabs
                     norm_st = (row_dict.get("Status") or row_dict.get("Lead") or "").strip()
                     norm_stg = (row_dict.get("Stage") or row_dict.get("Lead Status") or "").strip()
@@ -332,7 +327,6 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                         row_dict["Stage"] = norm_stg
                         if not row_dict.get("Lead Status"):
                             row_dict["Lead Status"] = norm_stg
-                    
                     normalized.append(row_dict)
 
             # 4. If fetching Active Leads, also seamlessly integrate 'Active Leads from Sept '
@@ -359,7 +353,6 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                             s_no = s_dict.get("S. No.") or str(s_idx + 1)
                             remarks = s_dict.get("Remarks /Updates") or ""
                             req = s_dict.get("Requirement") or ""
-                            
                             # In 'Active Leads from Sept ':
                             # - 'Lead' column specifies the qualification / status (e.g. Won, Warm, Cold, Discovery, Hot)
                             # - 'Lead Status' column specifies the pipeline stage (e.g. Won, Proposal Sent, Lost, In Conversation, Contacted)
@@ -397,8 +390,6 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                                     st = "Cold"
                                 stage = "Lost"
 
-                            lid = f"COG-S{s_idx + 1}"
-
                             rev_est = (
                                 s_dict.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)")
                                 or s_dict.get("Revenue Estimations")
@@ -416,7 +407,6 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                             unified_row.update(s_dict)
                             # Also populate normalized CRM keys for cross-tab compatibility
                             unified_row.update({
-                                "Lead ID": lid,
                                 "Date": s_dict.get("Date") or "",
                                 "Company": s_dict.get("Company") or "",
                                 "Requirement": req,
@@ -569,29 +559,8 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
         return leads_service.add_lead(lead_data)
     
     clean_data = _clean_lead_payload(lead_data)
-
-    # Auto-generate next Lead ID if not present in clean_data
-    max_num = 1000
-    max_row_num = 500
-    try:
-        all_leads_dict = fetch_sheet_data(sheet_url, range_name, bypass_cache=True)
-        for row in all_leads_dict.get("rows", []):
-            r_num = int(row.get("_row_num") or 0)
-            if r_num > max_row_num:
-                max_row_num = r_num
-            lid = row.get("Lead ID") or ""
-            if lid.startswith("COG-"):
-                try:
-                    num = int(lid.split("-")[1])
-                    if num > max_num:
-                        max_num = num
-                except Exception:
-                    pass
-    except Exception:
-        pass
-
-    if not clean_data.get("Lead ID"):
-        clean_data["Lead ID"] = f"COG-{max_num + 1}"
+    # Remove Lead ID if present
+    clean_data.pop("Lead ID", None)
 
     try:
         service = _get_service()
@@ -620,10 +589,29 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
         headers = [h.strip() for h in values[0]]
         deduped_headers = _deduplicate_headers(headers)
         
-        # 2c. Ensure the spreadsheet has any new columns present in clean_data (including 'Lead ID' or Tender fields)
-        new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and v != ""]
-        if "Lead ID" not in deduped_headers and "Lead ID" not in new_cols:
-            new_cols.append("Lead ID")
+        # 2b. Field alias mapping
+        alias_map = {
+            "Lead Source": clean_data.get("Lead Source") or clean_data.get("Source", ""),
+            "POC Name": clean_data.get("POC Name") or clean_data.get("Name", "") or clean_data.get("Company POC Name", ""),
+            "Name": clean_data.get("Name") or clean_data.get("POC Name", "") or clean_data.get("Company POC Name", ""),
+            "Contact No.": clean_data.get("Contact No.") or clean_data.get("Phone", "") or clean_data.get("Company POC Phone Number", ""),
+            "Phone": clean_data.get("Phone") or clean_data.get("Contact No.", "") or clean_data.get("Company POC Phone Number", ""),
+            "Email Id": clean_data.get("Email Id") or clean_data.get("Email", "") or clean_data.get("Company POC Email ID", ""),
+            "Email": clean_data.get("Email") or clean_data.get("Email Id", "") or clean_data.get("Company POC Email ID", ""),
+            "Company": clean_data.get("Company") or clean_data.get("Company/Brand Name", "") or clean_data.get("Company Name", ""),
+            "Cog POC": clean_data.get("Cog POC") or clean_data.get("Cog POC Name", ""),
+            "Revenue Estimation (In INR) (Oct 26 - Mar 27)": clean_data.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)") or clean_data.get("Revenue Estimations", ""),
+            "Revenue Estimations": clean_data.get("Revenue Estimations") or clean_data.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)", ""),
+            "Retainer Cost": clean_data.get("Retainer Cost") or clean_data.get("Retainer cost", ""),
+            "Retainer cost": clean_data.get("Retainer cost") or clean_data.get("Retainer Cost", ""),
+        }
+        for ak, av in alias_map.items():
+            if av and not clean_data.get(ak):
+                clean_data[ak] = av
+
+        # 2c. Ensure the spreadsheet has any new columns present in clean_data (excluding UI aliases)
+        ui_aliases = {"Company/Brand Name", "Company Name", "Company POC Name", "Company POC Email ID", "Company POC Phone Number", "Cog POC Name"}
+        new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and k not in ui_aliases and k != "Lead ID" and v != ""]
         if new_cols:
             try:
                 updated_headers = headers + new_cols
