@@ -136,6 +136,16 @@ const getRowVal = (row: Record<string, any>, colName: string): any => {
   }
   if (colName === "Company" && row["Company Name"]) return row["Company Name"];
   if (colName === "Company Name" && row["Company"]) return row["Company"];
+  if (colName === "Status" || colName === "Lead") {
+    if (row["Status"] && String(row["Status"]).trim()) return row["Status"];
+    if (row["Lead"] && String(row["Lead"]).trim()) return row["Lead"];
+    if (row["Lead Status"] && String(row["Lead Status"]).trim()) return row["Lead Status"];
+  }
+  if (colName === "Stage" || colName === "Lead Status") {
+    if (row["Stage"] && String(row["Stage"]).trim()) return row["Stage"];
+    if (row["Lead Status"] && String(row["Lead Status"]).trim()) return row["Lead Status"];
+    if (row["Lead"] && String(row["Lead"]).trim()) return row["Lead"];
+  }
   const lower = colName.toLowerCase().trim();
   for (const [k, v] of Object.entries(row)) {
     if (k.toLowerCase().trim() === lower) return v;
@@ -222,9 +232,12 @@ const getLegendColor = (sourceStr: string) => {
 
 // Helper to retrieve row status value
 const getRowStatus = (row: Record<string, any>): string => {
+  if (row["Status"] && String(row["Status"]).trim()) return String(row["Status"]).trim();
+  if (row["Lead"] && String(row["Lead"]).trim()) return String(row["Lead"]).trim();
+  if (row["Lead Status"] && String(row["Lead Status"]).trim()) return String(row["Lead Status"]).trim();
   for (const [k, v] of Object.entries(row)) {
     const kLower = k.toLowerCase().trim();
-    if (kLower === "status") {
+    if (kLower === "status" || kLower === "lead") {
       const val = String(v || "").trim();
       if (val) return val;
     }

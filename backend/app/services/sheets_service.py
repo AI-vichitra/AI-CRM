@@ -158,7 +158,7 @@ def _fetch_public_csv(sheet_url: str) -> dict:
         
     return {"headers": headers, "rows": normalized, "total": len(normalized), "is_mock": False}
 
-def _derive_sept_stage(remarks: str, requirement: str, status: str) -> str:
+def _derive_sept_stage(remarks: str, requirement: str, status: str, fallback: str = "Discovery") -> str:
     text = f"{remarks} {requirement}".lower()
     if "proposal sent" in text or "proposal shared" in text:
         return "Proposal sent"
@@ -175,10 +175,12 @@ def _derive_sept_stage(remarks: str, requirement: str, status: str) -> str:
     st = status.strip().lower()
     if st in ["won", "closed won"]:
         return "Won"
-    if st == "cold":
-        return "Cold"
-    if st in ["hot", "warm", "discovery"]:
+    if st in ["cold", "lost", "dead"]:
+        return "Lost"
+    if st in ["hot", "warm"]:
         return "In Conversation"
+    if fallback:
+        return fallback
     return status.strip() or "Discovery"
 
 def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: bool = False) -> dict:
@@ -318,6 +320,18 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                     # Backfill/inject Lead ID
                     if not row_dict.get("Lead ID"):
                         row_dict["Lead ID"] = f"COG-{1000 + row_dict['_row_num']}"
+
+                    # Normalize Status <-> Lead and Stage <-> Lead Status across all tabs
+                    norm_st = (row_dict.get("Status") or row_dict.get("Lead") or "").strip()
+                    norm_stg = (row_dict.get("Stage") or row_dict.get("Lead Status") or "").strip()
+                    if norm_st:
+                        row_dict["Status"] = norm_st
+                        if not row_dict.get("Lead"):
+                            row_dict["Lead"] = norm_st
+                    if norm_stg:
+                        row_dict["Stage"] = norm_stg
+                        if not row_dict.get("Lead Status"):
+                            row_dict["Lead Status"] = norm_stg
                     
                     normalized.append(row_dict)
 
@@ -345,8 +359,44 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                             s_no = s_dict.get("S. No.") or str(s_idx + 1)
                             remarks = s_dict.get("Remarks /Updates") or ""
                             req = s_dict.get("Requirement") or ""
-                            st = s_dict.get("Status") or ""
-                            stage = _derive_sept_stage(remarks, req, st)
+                            
+                            # In 'Active Leads from Sept ':
+                            # - 'Lead' column specifies the qualification / status (e.g. Won, Warm, Cold, Discovery, Hot)
+                            # - 'Lead Status' column specifies the pipeline stage (e.g. Won, Proposal Sent, Lost, In Conversation, Contacted)
+                            st = (s_dict.get("Lead") or s_dict.get("Status") or "").strip()
+                            raw_lead_status = (s_dict.get("Lead Status") or s_dict.get("Stage") or "").strip()
+
+                            if raw_lead_status:
+                                rls_lower = raw_lead_status.lower()
+                                if rls_lower in ["won", "closed won"]:
+                                    stage = "Won"
+                                elif rls_lower in ["lost", "closed lost", "dead", "dropped"]:
+                                    stage = "Lost"
+                                elif "proposal sent" in rls_lower or "proposal shared" in rls_lower:
+                                    stage = "Proposal sent"
+                                elif "proposal to be" in rls_lower:
+                                    stage = "Proposal to be Sent"
+                                elif "portfolio sent" in rls_lower:
+                                    stage = "Portfolio Sent"
+                                elif rls_lower in ["in conversation", "conversation"]:
+                                    stage = "In Conversation"
+                                elif rls_lower in ["contacted"]:
+                                    derived = _derive_sept_stage(remarks, req, st, fallback="Contacted")
+                                    stage = derived
+                                else:
+                                    stage = raw_lead_status
+                            else:
+                                stage = _derive_sept_stage(remarks, req, st, fallback=(st if st in ["Won", "Cold"] else "Discovery"))
+
+                            # If either Lead or Lead Status is Won, unify both Status and Stage to Won
+                            if st.lower() in ["won", "closed won"] or raw_lead_status.lower() in ["won", "closed won"]:
+                                st = "Won"
+                                stage = "Won"
+                            elif st.lower() in ["lost", "closed lost", "dead"] or raw_lead_status.lower() in ["lost", "closed lost", "dead"]:
+                                if not st or st == "Discovery":
+                                    st = "Cold"
+                                stage = "Lost"
+
                             lid = f"COG-S{s_idx + 1}"
 
                             rev_est = (
@@ -372,6 +422,8 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                                 "Requirement": req,
                                 "Status": st,
                                 "Stage": stage,
+                                "Lead": st,
+                                "Lead Status": stage,
                                 "Cog POC": s_dict.get("Cog POC") or "",
                                 "Source": s_dict.get("Lead Source") or "",
                                 "Lead Source": s_dict.get("Lead Source") or "",
@@ -665,13 +717,17 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
             "Remarks /Updates": clean_data.get("Remarks /Updates") or clean_data.get("Last Update", ""),
             "Revenue Estimation (In INR) (Oct 26 - Mar 27)": clean_data.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)") or clean_data.get("Revenue Estimations", ""),
             "Retainer Cost": clean_data.get("Retainer Cost") or clean_data.get("Retainer cost", ""),
+            "Lead": clean_data.get("Lead") or clean_data.get("Status", ""),
+            "Lead Status": clean_data.get("Lead Status") or clean_data.get("Stage", ""),
+            "Status": clean_data.get("Status") or clean_data.get("Lead", ""),
+            "Stage": clean_data.get("Stage") or clean_data.get("Lead Status", ""),
         }
         for ak, av in alias_map.items():
             if av and not clean_data.get(ak):
                 clean_data[ak] = av
         
         # Auto-add any new non-empty columns (e.g. Tender Detail fields) to sheet headers (skip synthetic aliases on Sept tab)
-        sept_ignore_aliases = {"Source", "Name", "Phone", "Email", "Last Update", "Revenue Estimations", "Retainer cost", "Lead ID", "Stage"} if is_sept_lead else set()
+        sept_ignore_aliases = {"Source", "Name", "Phone", "Email", "Last Update", "Revenue Estimations", "Retainer cost", "Lead ID", "Stage", "Status"} if is_sept_lead else set()
         new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and k not in sept_ignore_aliases and v != ""]
         if new_cols:
             try:
