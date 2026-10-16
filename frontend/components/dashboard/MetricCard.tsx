@@ -65,6 +65,7 @@ export default function MetricCard({
   return (
     <div 
       onClick={onClick}
+      title={onClick ? (isSelected ? "Click to clear filter and show all leads" : `Click to filter table by ${label}`) : undefined}
       className={`relative overflow-hidden transition-all duration-150 group p-5 flex flex-col justify-between rounded-2xl border bg-white dark:bg-[#111118] text-gray-900 dark:text-white shadow-sm dark:shadow-xl ${
         onClick ? "cursor-pointer hover:border-gray-300 dark:hover:border-white/20 select-none" : ""
       } ${
@@ -81,9 +82,16 @@ export default function MetricCard({
 
       {/* Top Row: Label and Three Dots */}
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-sans font-medium tracking-wide text-gray-500 dark:text-[#888899]">
-          {label}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[11px] font-sans font-medium tracking-wide text-gray-500 dark:text-[#888899]">
+            {label}
+          </span>
+          {isSelected && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+              Filtered
+            </span>
+          )}
+        </div>
         <button 
           type="button" 
           onClick={(e) => { e.stopPropagation(); }}

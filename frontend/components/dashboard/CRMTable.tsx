@@ -17,6 +17,8 @@ interface CRMTableProps {
   onQuickUpdate?: (row: Record<string, any>, col: string, val: string) => Promise<void>;
   isTenderDashboard?: boolean;
   currentTab?: string;
+  activeKpiFilter?: string;
+  onResetKpiFilter?: () => void;
 }
 
 const getCampaignIcon = (name: string) => {
@@ -199,6 +201,8 @@ export default function CRMTable({
   onQuickUpdate,
   isTenderDashboard,
   currentTab,
+  activeKpiFilter,
+  onResetKpiFilter,
 }: CRMTableProps) {
   const [localSearchTerm, setLocalSearchTerm] = useState("");
   const [isManagerOpen, setIsManagerOpen] = useState(false);
@@ -419,10 +423,25 @@ export default function CRMTable({
       {/* Table Action Bar */}
       <div className="px-5 py-4 border-b border-gray-100 dark:border-[rgba(255,255,255,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Left: Section Title */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white font-sans tracking-tight">
             Campaign Performance
           </h3>
+          {activeKpiFilter && activeKpiFilter !== "Total Leads" && (
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <span>Showing: <strong>{activeKpiFilter}</strong> ({rows.length} {rows.length === 1 ? "lead" : "leads"})</span>
+              {onResetKpiFilter && (
+                <button
+                  type="button"
+                  onClick={onResetKpiFilter}
+                  className="ml-1 p-0.5 hover:bg-emerald-200/60 dark:hover:bg-emerald-800/60 rounded-full cursor-pointer transition-colors inline-flex items-center justify-center"
+                  title="Clear filter and show all leads"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
           {(selectedSource !== "All" || selectedStatus !== "All" || selectedType !== "All") && (
             <button
               type="button"

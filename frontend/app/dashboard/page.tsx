@@ -886,6 +886,8 @@ function DashboardContent() {
                 onQuickUpdate={!sheetData?.is_mock ? handleQuickUpdateField : undefined}
                 isTenderDashboard={isTendersTab}
                 currentTab={tab}
+                activeKpiFilter={selectedKpiTab}
+                onResetKpiFilter={() => setSelectedKpiTab("Total Leads")}
               />
             )}
           </div>
