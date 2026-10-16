@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { X, Save } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Save, Check, ChevronDown } from "lucide-react";
+import { toast } from "sonner";
 
 interface LeadFormModalProps {
   isOpen: boolean;
@@ -105,14 +106,28 @@ export default function LeadFormModal({
   const [pocPhone, setPocPhone] = useState("");
   const [cogPoc, setCogPoc] = useState("");
   const [source, setSource] = useState("");
-  const [requirement, setRequirement] = useState("");
+  const [selectedRequirements, setSelectedRequirements] = useState<string[]>([]);
+  const [hasOtherReq, setHasOtherReq] = useState(false);
   const [customRequirement, setCustomRequirement] = useState("");
+  const [isReqDropdownOpen, setIsReqDropdownOpen] = useState(false);
+  const reqDropdownRef = useRef<HTMLDivElement>(null);
   const [costValue, setCostValue] = useState("");
 
   // Generic fallback state for internal leads tab
   const [genericFormData, setGenericFormData] = useState<Record<string, string>>({});
 
   const isActiveLeadsMode = currentTab !== "internal_leads";
+
+  // Click-outside listener for requirements dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (reqDropdownRef.current && !reqDropdownRef.current.contains(e.target as Node)) {
+        setIsReqDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Generic form headers for internal leads fallback
   let genericHeaders = headers.filter(
@@ -189,23 +204,46 @@ export default function LeadFormModal({
 
       setSource(String(initialData["Source"] || initialData["source"] || "").trim());
 
-      // Requirement handling
+      // Requirement handling (multi-select)
       const rawReq = String(initialData["Requirement"] || initialData["requirement"] || "").trim();
       if (rawReq) {
-        const matched = REQUIREMENT_OPTIONS.find(
-          (opt) => opt.toLowerCase() === rawReq.toLowerCase()
-        );
-        if (matched) {
-          setRequirement(matched);
-          setCustomRequirement("");
+        // Split by comma or plus sign
+        const tokens = rawReq
+          .split(/[,+]/)
+          .map((t) => t.trim())
+          .filter(Boolean);
+        const selected: string[] = [];
+        const customParts: string[] = [];
+
+        tokens.forEach((token) => {
+          const matched = REQUIREMENT_OPTIONS.find(
+            (opt) => opt.toLowerCase() === token.toLowerCase()
+          );
+          if (matched) {
+            if (!selected.includes(matched)) selected.push(matched);
+          } else {
+            customParts.push(token);
+          }
+        });
+
+        if (selected.length === 0 && customParts.length === 0) {
+          customParts.push(rawReq);
+        }
+
+        setSelectedRequirements(selected);
+        if (customParts.length > 0) {
+          setHasOtherReq(true);
+          setCustomRequirement(customParts.join(", "));
         } else {
-          setRequirement("OTHER");
-          setCustomRequirement(rawReq);
+          setHasOtherReq(false);
+          setCustomRequirement("");
         }
       } else {
-        setRequirement("");
+        setSelectedRequirements([]);
+        setHasOtherReq(false);
         setCustomRequirement("");
       }
+      setIsReqDropdownOpen(false);
 
       // Cost handling depending on Retainer vs Project
       if (isRetainer) {
@@ -245,8 +283,10 @@ export default function LeadFormModal({
       setPocPhone("");
       setCogPoc("");
       setSource("");
-      setRequirement("");
+      setSelectedRequirements([]);
+      setHasOtherReq(false);
       setCustomRequirement("");
+      setIsReqDropdownOpen(false);
       setCostValue("");
 
       const emptyGeneric: Record<string, string> = {};
@@ -333,8 +373,16 @@ export default function LeadFormModal({
       });
 
       // 8. Requirement
-      const finalReq = (requirement === "OTHER" ? customRequirement : requirement) || "";
-      payload["Requirement"] = finalReq;
+      const finalParts = [...selectedRequirements];
+      if (hasOtherReq && customRequirement.trim()) {
+        finalParts.push(customRequirement.trim());
+      }
+      if (finalParts.length === 0) {
+        toast.error("Please select at least one requirement.");
+        setLoading(false);
+        return;
+      }
+      payload["Requirement"] = finalParts.join(", ");
 
       // 9. Cost field based on Toggle: Retainer vs Project
       if (leadType === "Retainer") {
@@ -536,31 +584,142 @@ export default function LeadFormModal({
                 </select>
               </div>
 
-              {/* 8. Requirement (Compulsory) */}
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center gap-1">
-                  <span>Requirement</span>
-                  <span className="text-red-500">*</span>
+              {/* 8. Requirement (Compulsory - Multi-Select) */}
+              <div className="space-y-1.5 flex flex-col relative" ref={reqDropdownRef}>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <span>Requirement</span>
+                    <span className="text-red-500">*</span>
+                  </span>
+                  {(selectedRequirements.length > 0 || (hasOtherReq && customRequirement.trim().length > 0)) && (
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
+                      {selectedRequirements.length + (hasOtherReq && customRequirement.trim() ? 1 : 0)} selected
+                    </span>
+                  )}
                 </label>
-                <select
-                  value={requirement}
-                  required
-                  onChange={(e) => setRequirement(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none cursor-pointer"
+
+                {/* Multi-select trigger */}
+                <div
+                  onClick={() => setIsReqDropdownOpen((prev) => !prev)}
+                  className={`min-h-[38px] w-full px-3 py-1.5 text-xs bg-gray-50 dark:bg-[#161622] border rounded-lg cursor-pointer transition-colors flex items-center justify-between gap-2 ${
+                    isReqDropdownOpen
+                      ? "border-emerald-500 ring-1 ring-emerald-500/20"
+                      : "border-gray-200 dark:border-[rgba(255,255,255,0.06)] hover:border-gray-300 dark:hover:border-[rgba(255,255,255,0.12)]"
+                  }`}
                 >
-                  <option value="">-- Select Requirement --</option>
-                  {REQUIREMENT_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                  <option value="OTHER">Other / Custom</option>
-                </select>
-                {requirement === "OTHER" && (
+                  <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0 py-0.5">
+                    {selectedRequirements.length === 0 && !hasOtherReq ? (
+                      <span className="text-gray-400 dark:text-gray-500">Select requirements...</span>
+                    ) : (
+                      <>
+                        {selectedRequirements.map((req) => (
+                          <span
+                            key={req}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/40"
+                          >
+                            <span>{req}</span>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRequirements((prev) => prev.filter((r) => r !== req));
+                              }}
+                              className="hover:bg-emerald-200/60 dark:hover:bg-emerald-800/60 rounded-full p-0.5 cursor-pointer inline-flex items-center justify-center transition-colors"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </span>
+                          </span>
+                        ))}
+                        {hasOtherReq && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/40">
+                            <span>{customRequirement.trim() || "Other"}</span>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setHasOtherReq(false);
+                                setCustomRequirement("");
+                              }}
+                              className="hover:bg-indigo-200/60 dark:hover:bg-indigo-800/60 rounded-full p-0.5 cursor-pointer inline-flex items-center justify-center transition-colors"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </span>
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${
+                      isReqDropdownOpen ? "rotate-180 text-emerald-500" : ""
+                    }`}
+                  />
+                </div>
+
+                {/* Dropdown Menu */}
+                {isReqDropdownOpen && (
+                  <div className="absolute top-[100%] left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.1)] rounded-lg shadow-xl p-1.5 space-y-1">
+                    {REQUIREMENT_OPTIONS.map((opt) => {
+                      const isSelected = selectedRequirements.includes(opt);
+                      return (
+                        <div
+                          key={opt}
+                          onClick={() => {
+                            setSelectedRequirements((prev) =>
+                              isSelected ? prev.filter((r) => r !== opt) : [...prev, opt]
+                            );
+                          }}
+                          className={`flex items-center justify-between px-3 py-1.5 rounded-md text-xs cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-medium"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#1f1f2e]"
+                          }`}
+                        >
+                          <span>{opt}</span>
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? "bg-emerald-500 border-emerald-500 text-white"
+                                : "border-gray-300 dark:border-gray-600 bg-white dark:bg-[#161622]"
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Other / Custom checkbox option */}
+                    <div
+                      onClick={() => setHasOtherReq((prev) => !prev)}
+                      className={`flex items-center justify-between px-3 py-1.5 rounded-md text-xs cursor-pointer transition-colors border-t border-gray-100 dark:border-gray-800/60 pt-2 ${
+                        hasOtherReq
+                          ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-medium"
+                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#1f1f2e]"
+                      }`}
+                    >
+                      <span>Other / Custom</span>
+                      <div
+                        className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                          hasOtherReq
+                            ? "bg-indigo-500 border-indigo-500 text-white"
+                            : "border-gray-300 dark:border-gray-600 bg-white dark:bg-[#161622]"
+                        }`}
+                      >
+                        {hasOtherReq && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom requirement text input */}
+                {hasOtherReq && (
                   <input
                     type="text"
                     required
-                    placeholder="Enter custom requirement..."
+                    placeholder="Enter custom requirement(s)..."
                     value={customRequirement}
                     onChange={(e) => setCustomRequirement(e.target.value)}
                     className="w-full mt-1.5 px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] focus:border-emerald-500 rounded-lg text-gray-900 dark:text-white font-sans outline-none transition-all"
