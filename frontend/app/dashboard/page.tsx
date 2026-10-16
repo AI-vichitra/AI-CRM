@@ -20,19 +20,14 @@ import { SheetData, DashboardSummary, GraphConfig } from "../../lib/types";
 import { toast } from "sonner";
 import { RefreshCw, Search, Bell, X, AlertCircle, Eye, EyeOff } from "lucide-react";
 
-// Helper function to check if a date string is today's date
-const isToday = (dateVal: any): boolean => {
-  if (!dateVal) return false;
+// Helper to parse dates like DD/MM/YYYY, DD-MM-YYYY, or YYYY-MM-DD
+const parseDate = (dateVal: any): Date | null => {
+  if (!dateVal) return null;
   const dateStr = String(dateVal).trim();
-  if (!dateStr || dateStr === "—" || dateStr.toLowerCase() === "placeholder") return false;
+  if (!dateStr || dateStr === "—" || dateStr.toLowerCase() === "placeholder") return null;
 
-  const today = new Date();
-  const todayDay = today.getDate();
-  const todayMonth = today.getMonth() + 1; // 1-indexed
-  const todayYear = today.getFullYear();
-
-  // Try parsing custom formats: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
-  const parts = dateStr.split(/[-/.]/);
+  const datePart = dateStr.split(/\s+/)[0];
+  const parts = datePart.split(/[-/.]/);
   if (parts.length === 3) {
     const p0 = parseInt(parts[0], 10);
     const p1 = parseInt(parts[1], 10);
@@ -41,36 +36,40 @@ const isToday = (dateVal: any): boolean => {
     if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
       // YYYY-MM-DD
       if (parts[0].length === 4) {
-        return p0 === todayYear && p1 === todayMonth && p2 === todayDay;
+        return new Date(p0, p1 - 1, p2);
       }
-      // DD-MM-YYYY
+      // DD-MM-YYYY or DD/MM/YYYY
       if (parts[2].length === 4) {
-        if (p2 === todayYear) {
-          return p0 === todayDay && p1 === todayMonth;
+        if (p0 <= 12 && p1 > 12) {
+          return new Date(p2, p0 - 1, p1);
         }
+        return new Date(p2, p1 - 1, p0);
       }
-      // YY formats
+      // DD-MM-YY or DD/MM/YY
       if (parts[2].length === 2) {
-        const shortYear = todayYear % 100;
-        if (p2 === shortYear) {
-          return p0 === todayDay && p1 === todayMonth;
+        const yr = p2 < 50 ? 2000 + p2 : 1900 + p2;
+        if (p0 <= 12 && p1 > 12) {
+          return new Date(yr, p0 - 1, p1);
         }
+        return new Date(yr, p1 - 1, p0);
       }
     }
   }
 
-  // Fallback to standard JS Date parsing
   const parsed = Date.parse(dateStr);
-  if (!isNaN(parsed)) {
-    const d = new Date(parsed);
-    return (
-      d.getDate() === todayDay &&
-      d.getMonth() + 1 === todayMonth &&
-      d.getFullYear() === todayYear
-    );
-  }
+  return isNaN(parsed) ? null : new Date(parsed);
+};
 
-  return false;
+// Helper function to check if a date string is today's date
+const isToday = (dateVal: any): boolean => {
+  const d = parseDate(dateVal);
+  if (!d) return false;
+  const today = new Date();
+  return (
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear()
+  );
 };
 
 export default function DashboardPage() {
@@ -403,29 +402,31 @@ function DashboardContent() {
       rows = rows.filter(row => !isRowTender(row));
     }
 
-    if (selectedMonth === "All") return rows;
-    
-    return rows.filter(row => {
-      const dateVal = row[dateCol];
-      if (!dateVal) return false;
-      const parts = String(dateVal).trim().replace(/\s+/g, "").split(/[-/.]/);
-      if (parts.length === 3) {
-        const p0 = parseInt(parts[0], 10);
-        const p1 = parseInt(parts[1], 10);
-        const p2 = parseInt(parts[2], 10);
-        if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
-          let y = p2;
-          let m = p1;
-          if (parts[0].length === 4) {
-            y = p0;
-            m = p1;
-          }
-          const mKey = `${y}-${String(m).padStart(2, '0')}`;
-          return mKey === selectedMonth;
-        }
-      }
-      return false;
-    });
+    let finalRows = rows;
+    if (selectedMonth !== "All" && dateCol) {
+      finalRows = rows.filter(row => {
+        const dateVal = row[dateCol];
+        if (!dateVal) return false;
+        const d = parseDate(dateVal);
+        if (!d) return false;
+        const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return mKey === selectedMonth;
+      });
+    }
+
+    // Default sort by Date descending (latest leads first, then older ones)
+    if (dateCol) {
+      return [...finalRows].sort((a, b) => {
+        const dateA = parseDate(a[dateCol]);
+        const dateB = parseDate(b[dateCol]);
+        if (dateA && dateB) return dateB.getTime() - dateA.getTime();
+        if (dateA && !dateB) return -1;
+        if (!dateA && dateB) return 1;
+        return 0;
+      });
+    }
+
+    return finalRows;
   }, [sheetData, selectedMonth, dateCol, isTendersTab, isInternalLeadsTab, includeArchived]);
 
   const filteredSheetData = React.useMemo<SheetData | null>(() => {

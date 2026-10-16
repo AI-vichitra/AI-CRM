@@ -61,13 +61,14 @@ const getCampaignIcon = (name: string) => {
   );
 };
 
-// Helper to parse dates like DD/MM/YYYY or DD-MM-YYYY
+// Helper to parse dates like DD/MM/YYYY, DD-MM-YYYY, or YYYY-MM-DD
 const parseDate = (dateVal: any): Date | null => {
   if (!dateVal) return null;
   const dateStr = String(dateVal).trim();
   if (!dateStr || dateStr === "—" || dateStr.toLowerCase() === "placeholder") return null;
 
-  const parts = dateStr.replace(/\s+/g, "").split(/[-/.]/);
+  const datePart = dateStr.split(/\s+/)[0];
+  const parts = datePart.split(/[-/.]/);
   if (parts.length === 3) {
     const p0 = parseInt(parts[0], 10);
     const p1 = parseInt(parts[1], 10);
@@ -80,7 +81,18 @@ const parseDate = (dateVal: any): Date | null => {
       }
       // DD-MM-YYYY or DD/MM/YYYY
       if (parts[2].length === 4) {
+        if (p0 <= 12 && p1 > 12) {
+          return new Date(p2, p0 - 1, p1);
+        }
         return new Date(p2, p1 - 1, p0);
+      }
+      // DD-MM-YY or DD/MM/YY
+      if (parts[2].length === 2) {
+        const yr = p2 < 50 ? 2000 + p2 : 1900 + p2;
+        if (p0 <= 12 && p1 > 12) {
+          return new Date(yr, p0 - 1, p1);
+        }
+        return new Date(yr, p1 - 1, p0);
       }
     }
   }
@@ -224,8 +236,18 @@ export default function CRMTable({
     if (norm === "lead id") return false;
     return ["visitors", "contacts", "companies", "leads", "value", "amount", "revenue", "no."].some(x => norm.includes(x));
   };
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const isDateColumn = (colName: string) => {
+    const norm = colName.toLowerCase().trim();
+    return norm === "date" || norm.includes("date") || norm === "deadline" || norm === "due";
+  };
+  const [sortColumn, setSortColumn] = useState<string | null>("Date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Reset to default latest date first when tab changes
+  useEffect(() => {
+    setSortColumn("Date");
+    setSortDirection("desc");
+  }, [currentTab]);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -307,11 +329,15 @@ export default function CRMTable({
 
   // Sorting logic
   const handleSort = (col: string) => {
-    if (sortColumn === col) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    const activeCol = sortColumn || (activeCols.find(isDateColumn) || null);
+    const activeDir = sortColumn ? sortDirection : "desc";
+
+    if (activeCol === col) {
+      setSortColumn(col);
+      setSortDirection(activeDir === "asc" ? "desc" : "asc");
     } else {
       setSortColumn(col);
-      setSortDirection("asc");
+      setSortDirection(isDateColumn(col) ? "desc" : "asc");
     }
   };
 
@@ -345,19 +371,38 @@ export default function CRMTable({
 
   // Sort filtered rows
   const sortedRows = [...filteredRows];
-  if (sortColumn) {
+  const effectiveSortCol = sortColumn || (activeCols.find(isDateColumn) || null);
+  const effectiveSortDir = sortColumn ? sortDirection : "desc";
+
+  if (effectiveSortCol) {
     sortedRows.sort((a, b) => {
-      let valA = getRowVal(a, sortColumn) ?? "";
-      let valB = getRowVal(b, sortColumn) ?? "";
-      
+      let valA = getRowVal(a, effectiveSortCol) ?? "";
+      let valB = getRowVal(b, effectiveSortCol) ?? "";
+
+      // 1. If Date column, sort chronologically by timestamp (latest first when desc)
+      if (isDateColumn(effectiveSortCol)) {
+        const dateA = parseDate(valA);
+        const dateB = parseDate(valB);
+
+        if (dateA && dateB) {
+          const diff = dateA.getTime() - dateB.getTime();
+          return effectiveSortDir === "asc" ? diff : -diff;
+        }
+        if (dateA && !dateB) return -1;
+        if (!dateA && dateB) return 1;
+        return 0;
+      }
+
+      // 2. If Numeric column, sort numerically
       const numA = parseFloat(String(valA).replace(/[^0-9.-]/g, ""));
       const numB = parseFloat(String(valB).replace(/[^0-9.-]/g, ""));
       
       if (!isNaN(numA) && !isNaN(numB)) {
-        return sortDirection === "asc" ? numA - numB : numB - numA;
+        return effectiveSortDir === "asc" ? numA - numB : numB - numA;
       }
       
-      return sortDirection === "asc" 
+      // 3. Fallback: String alphabetical
+      return effectiveSortDir === "asc" 
         ? String(valA).localeCompare(String(valB)) 
         : String(valB).localeCompare(String(valA));
     });
@@ -536,17 +581,18 @@ export default function CRMTable({
               {activeCols.map((col, idx) => {
                 const isRight = isNumericColumn(col) && col.toLowerCase() !== "no.";
                 const colLabel = col === "Company" ? "Company Name" : col;
+                const isSorted = (effectiveSortCol === col);
                 return (
                   <th 
                     key={`${col}-${idx}`} 
                     className={`py-3 px-4 select-none cursor-pointer hover:bg-gray-150/50 dark:hover:bg-[rgba(255,255,255,0.03)] hover:text-gray-950 dark:hover:text-white transition-colors ${
                       isRight ? "text-right" : "text-left"
-                    }`}
+                    } ${isSorted ? "text-gray-950 dark:text-white" : ""}`}
                     onClick={() => handleSort(col)}
                   >
                     <div className={`flex items-center gap-1 ${isRight ? "justify-end" : "justify-start"}`}>
                       {colLabel}
-                      <ArrowUpDown className="w-3 h-3 text-[#555566]" />
+                      <ArrowUpDown className={`w-3 h-3 ${isSorted ? "text-emerald-500" : "text-[#555566]"}`} />
                     </div>
                   </th>
                 );
