@@ -80,7 +80,8 @@ def add_conversation(
 
 def get_conversations(
     lead_id: Optional[str] = None,
-    date: Optional[str] = None
+    date: Optional[str] = None,
+    lead_key: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     init_conversations_table()
     conn = get_connection()
@@ -90,9 +91,15 @@ def get_conversations(
     params = []
     conditions = []
 
-    if lead_id:
+    if lead_id and lead_key:
+        conditions.append("(lead_id = ? OR lead_key = ? OR lead_id = ? OR lead_key = ?)")
+        params.extend([lead_id.strip(), lead_id.strip(), lead_key.strip(), lead_key.strip()])
+    elif lead_id:
         conditions.append("(lead_id = ? OR lead_key = ?)")
         params.extend([lead_id.strip(), lead_id.strip()])
+    elif lead_key:
+        conditions.append("(lead_id = ? OR lead_key = ?)")
+        params.extend([lead_key.strip(), lead_key.strip()])
 
     if date:
         conditions.append("date = ?")

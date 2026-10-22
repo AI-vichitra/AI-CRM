@@ -16,10 +16,11 @@ class ConversationCreate(BaseModel):
 @router.get("/")
 def list_conversations(
     lead_id: Optional[str] = Query(None, description="Filter by Lead ID"),
-    date: Optional[str] = Query(None, description="Filter by Date (YYYY-MM-DD)")
+    date: Optional[str] = Query(None, description="Filter by Date (YYYY-MM-DD)"),
+    lead_key: Optional[str] = Query(None, description="Filter by Lead Key or Company Name")
 ):
     try:
-        return conversation_service.get_conversations(lead_id=lead_id, date=date)
+        return conversation_service.get_conversations(lead_id=lead_id, date=date, lead_key=lead_key)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch conversations: {str(e)}")
 

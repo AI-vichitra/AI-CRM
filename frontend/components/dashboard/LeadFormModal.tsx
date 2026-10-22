@@ -13,6 +13,7 @@ interface LeadFormModalProps {
   title: string;
   currentTab?: string;
   mandatoryColumns?: string[];
+  defaultCogPoc?: string;
 }
 
 // Helper to parse dates like DD/MM/YYYY or DD-MM-YYYY
@@ -92,6 +93,7 @@ export default function LeadFormModal({
   title,
   currentTab,
   mandatoryColumns = [],
+  defaultCogPoc = "",
 }: LeadFormModalProps) {
   const [loading, setLoading] = useState(false);
 
@@ -281,7 +283,7 @@ export default function LeadFormModal({
       setPocName("");
       setPocEmail("");
       setPocPhone("");
-      setCogPoc("");
+      setCogPoc(defaultCogPoc || "");
       setSource("");
       setSelectedRequirements([]);
       setHasOtherReq(false);

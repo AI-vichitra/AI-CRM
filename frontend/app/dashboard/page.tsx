@@ -109,6 +109,9 @@ function DashboardContent() {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [selectedKpiTab, setSelectedKpiTab] = useState<string>("Total Leads");
 
+  // Current logged in user
+  const [currentUser, setCurrentUser] = useState<{ name?: string; email?: string } | null>(null);
+
   // Lead modal states
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Record<string, any> | null>(null);
@@ -123,12 +126,21 @@ function DashboardContent() {
       // Target range based on tab: "Internal Leads" for internal leads, "Active Leads" for Active Leads & Tender
       const targetTabRange = tab === "internal_leads" ? "Internal Leads" : "Active Leads";
 
-      const [sum, data] = await Promise.all([
+      const [sum, data, authStatus] = await Promise.all([
         api.getDashboardSummary(bypassCache),
         api.getSheetData(bypassCache, targetTabRange),
+        api.getAuthStatus().catch(() => null),
       ]);
       setSummary(sum);
       setSheetData(data);
+      if (authStatus?.authenticated) {
+        let cleanName = authStatus.name || "";
+        if (!cleanName && authStatus.email) {
+          const prefix = authStatus.email.split("@")[0].replace(/[._]/g, " ");
+          cleanName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+        }
+        setCurrentUser({ name: cleanName, email: authStatus.email });
+      }
       if (showToast) {
         toast.success("CRM dashboard synchronized");
       }
@@ -254,11 +266,22 @@ function DashboardContent() {
   const handleSaveLead = async (leadDataInput: Record<string, any>) => {
     try {
       setRefreshing(true);
-      const targetRowNum = leadDataInput._row_num || (selectedLead && selectedLead._row_num);
+      const targetRowNum =
+        leadDataInput._row_num ||
+        (selectedActionLead && selectedActionLead._row_num) ||
+        (selectedLead && selectedLead._row_num);
+
       if (targetRowNum) {
-        const mergedData = selectedLead ? { ...selectedLead, ...leadDataInput } : leadDataInput;
+        const baseLead =
+          (selectedActionLead && selectedActionLead._row_num === targetRowNum)
+            ? selectedActionLead
+            : selectedLead;
+        const mergedData = baseLead ? { ...baseLead, ...leadDataInput } : leadDataInput;
         await api.updateLead(targetRowNum, mergedData);
         toast.success("Lead updated successfully");
+        if (selectedActionLead && selectedActionLead._row_num === targetRowNum) {
+          setSelectedActionLead(mergedData);
+        }
       } else {
         await api.addLead(leadDataInput);
         toast.success("Lead added successfully");
@@ -624,6 +647,7 @@ function DashboardContent() {
             onSave={handleSaveLead}
             title={modalTitle}
             mandatoryColumns={summary?.mandatory_columns || []}
+            defaultCogPoc={currentUser?.name}
           />
         </>
       ) : tab === "proposals" && sheetData ? (
@@ -650,6 +674,7 @@ function DashboardContent() {
             onSave={handleSaveLead}
             title={modalTitle}
             mandatoryColumns={summary?.mandatory_columns || []}
+            defaultCogPoc={currentUser?.name}
           />
         </>
       ) : tab === "tenders" && sheetData ? (
@@ -888,6 +913,8 @@ function DashboardContent() {
                 currentTab={tab}
                 activeKpiFilter={selectedKpiTab}
                 onResetKpiFilter={() => setSelectedKpiTab("Total Leads")}
+                onOpenAction={handleEditLead}
+                currentUser={currentUser}
               />
             )}
           </div>
@@ -932,6 +959,7 @@ function DashboardContent() {
               title={modalTitle}
               currentTab={tab}
               mandatoryColumns={summary?.mandatory_columns || []}
+              defaultCogPoc={currentUser?.name}
             />
           )}
 
@@ -940,6 +968,8 @@ function DashboardContent() {
             isOpen={isActionModalOpen}
             onClose={() => setIsActionModalOpen(false)}
             lead={selectedActionLead}
+            onSaveLead={handleSaveLead}
+            currentUser={currentUser}
           />
         </div>
       )}

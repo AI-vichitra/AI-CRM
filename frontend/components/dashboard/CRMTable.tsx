@@ -1,8 +1,24 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { SlidersHorizontal, ArrowUpDown, Edit3, Trash2, Search, X } from "lucide-react";
+import {
+  SlidersHorizontal,
+  ArrowUpDown,
+  Edit3,
+  Trash2,
+  Search,
+  X,
+  Phone,
+  MessageCircle,
+  Mail,
+  Calendar as CalendarIcon,
+  Plus,
+  User,
+  Clock,
+} from "lucide-react";
 import ColumnManager from "./ColumnManager";
+import { api } from "../../lib/api";
+import { Conversation } from "../../lib/types";
 
 interface CRMTableProps {
   headers: string[];
@@ -19,6 +35,8 @@ interface CRMTableProps {
   currentTab?: string;
   activeKpiFilter?: string;
   onResetKpiFilter?: () => void;
+  onOpenAction?: (row: Record<string, any>) => void;
+  currentUser?: { name?: string; email?: string } | null;
 }
 
 const getCampaignIcon = (name: string) => {
@@ -203,6 +221,8 @@ export default function CRMTable({
   currentTab,
   activeKpiFilter,
   onResetKpiFilter,
+  onOpenAction,
+  currentUser,
 }: CRMTableProps) {
   const [localSearchTerm, setLocalSearchTerm] = useState("");
   const [isManagerOpen, setIsManagerOpen] = useState(false);
@@ -946,229 +966,403 @@ export default function CRMTable({
       />
 
       {/* Lead Details Modal */}
-      {selectedDetailsRow && (() => {
-        const companyName = getRowVal(selectedDetailsRow, "Company") || getRowVal(selectedDetailsRow, "Company Name") || "Lead Details";
-        const leadId = getLeadId(selectedDetailsRow);
-        const sNo = selectedDetailsRow["S. No."] || selectedDetailsRow["S. No. "] || selectedDetailsRow["No."] || "";
-        const rowSource = selectedDetailsRow["Lead Source"] || selectedDetailsRow["Lead Type"] || getRowSource(selectedDetailsRow) || "—";
-        const rowStatus = getRowStatus(selectedDetailsRow);
-        const rawDate = getRowVal(selectedDetailsRow, "Date") || "";
-        const dateVal = formatDisplayDate(rawDate);
-        const pocName = selectedDetailsRow["POC Name"] || selectedDetailsRow["Name"] || "—";
-        const contactNo = selectedDetailsRow["Contact No."] || selectedDetailsRow["Phone"] || "—";
-        const emailVal = selectedDetailsRow["Email Id"] || selectedDetailsRow["Email"] || "—";
-        const requirement = getRowVal(selectedDetailsRow, "Requirement") || "—";
-        const stageVal = getRowVal(selectedDetailsRow, "Stage") || "—";
-        const cogPoc = getRowVal(selectedDetailsRow, "Cog POC") || "—";
-        const cogPocEmail = selectedDetailsRow["POC email"] || selectedDetailsRow["Cog POC Email"] || "";
-        const remarks = selectedDetailsRow["Remarks /Updates"] || selectedDetailsRow["Last Update"] || "—";
-        const messageFromProspect = selectedDetailsRow["Message from Prospect"] || "";
-        const revenueEst =
-          selectedDetailsRow["Revenue Estimation (In INR) (Oct 26 - Mar 27)"] ||
-          selectedDetailsRow["Revenue Estimations"] ||
-          selectedDetailsRow["Revenue Estimation"] ||
-          "—";
-        const retainerCost =
-          selectedDetailsRow["Retainer Cost"] ||
-          selectedDetailsRow["Retainer cost"] ||
-          "—";
+      {selectedDetailsRow && (
+        <LeadDetailsModal
+          lead={selectedDetailsRow}
+          onClose={() => setSelectedDetailsRow(null)}
+          onOpenAction={onOpenAction}
+          currentUser={currentUser}
+        />
+      )}
+    </div>
+  );
+}
 
-        // Collect any extra sheet fields not already rendered in the main modal sections
-        const coreKeys = new Set([
-          "Company", "Company Name", "Lead ID", "Source", "Lead Source", "Sources",
-          "Status", "Date", "POC Name", "Name", "Contact No.", "Phone",
-          "Email Id", "Email", "Requirement", "Stage", "Cog POC",
-          "Remarks /Updates", "Last Update",
-          "Revenue Estimation (In INR) (Oct 26 - Mar 27)", "Revenue Estimations", "Revenue Estimation",
-          "Retainer Cost", "Retainer cost",
-          "S. No.", "S. No. ", "No.",
-        ]);
-        if (cogPocEmail) {
-          coreKeys.add("POC email");
-          coreKeys.add("Cog POC Email");
-        }
-        if (messageFromProspect) {
-          coreKeys.add("Message from Prospect");
-        }
+function LeadDetailsModal({
+  lead,
+  onClose,
+  onOpenAction,
+  currentUser,
+}: {
+  lead: Record<string, any>;
+  onClose: () => void;
+  onOpenAction?: (row: Record<string, any>) => void;
+  currentUser?: { name?: string; email?: string } | null;
+}) {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loadingConversations, setLoadingConversations] = useState(false);
 
-        const extraFields = Object.entries(selectedDetailsRow).filter(([k, v]) => {
-          if (k.startsWith("_")) return false;
-          if (coreKeys.has(k)) return false;
-          return String(v || "").trim() !== "";
+  const companyName = getRowVal(lead, "Company") || getRowVal(lead, "Company Name") || "Lead Details";
+  const sNo = lead["S. No."] || lead["S. No. "] || lead["No."] || "";
+  const rowSource = lead["Lead Source"] || lead["Lead Type"] || getRowSource(lead) || "—";
+  const rowStatus = getRowStatus(lead);
+  const rawDate = getRowVal(lead, "Date") || "";
+  const dateVal = formatDisplayDate(rawDate);
+  const pocName = lead["POC Name"] || lead["Name"] || "—";
+  const contactNo = lead["Contact No."] || lead["Phone"] || "—";
+  const emailVal = lead["Email Id"] || lead["Email"] || "—";
+  const requirement = getRowVal(lead, "Requirement") || "—";
+  const stageVal = getRowVal(lead, "Stage") || "—";
+  const cogPoc = getRowVal(lead, "Cog POC") || "—";
+  const cogPocEmail = lead["POC email"] || lead["Cog POC Email"] || "";
+  const remarks = lead["Remarks /Updates"] || lead["Last Update"] || "—";
+  const messageFromProspect = lead["Message from Prospect"] || "";
+  const revenueEst =
+    lead["Revenue Estimation (In INR) (Oct 26 - Mar 27)"] ||
+    lead["Revenue Estimations"] ||
+    lead["Revenue Estimation"] ||
+    "—";
+  const retainerCost =
+    lead["Retainer Cost"] ||
+    lead["Retainer cost"] ||
+    "—";
+
+  // Fetch touchpoints / conversations for this lead
+  useEffect(() => {
+    let active = true;
+    const leadId = lead._row_num ? `lead_row_${lead._row_num}` : String(companyName).trim();
+    if (leadId) {
+      setLoadingConversations(true);
+      api
+        .getConversations(leadId, undefined, String(companyName).trim())
+        .then((res) => {
+          if (active) setConversations(res || []);
+        })
+        .catch((err) => {
+          console.error("Failed to load conversations in details modal:", err);
+        })
+        .finally(() => {
+          if (active) setLoadingConversations(false);
         });
+    }
+    return () => {
+      active = false;
+    };
+  }, [lead, companyName]);
 
-        return (
-          <>
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity" onClick={() => setSelectedDetailsRow(null)} />
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white dark:bg-[#111118] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[88vh]">
-              {/* Modal Header */}
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between bg-gray-50/50 dark:bg-[#161622]/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-sm">
-                    {companyName.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white font-sans">
-                        {companyName}
-                      </h3>
-                      {sNo && (
-                        <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300 border border-gray-200 dark:border-white/10">
-                          S. No. {sNo}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] font-semibold text-gray-500 dark:text-[#888899]">
-                      Source / Type: {rowSource}
-                    </span>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setSelectedDetailsRow(null)}
-                  className="p-1.5 text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 hover:bg-gray-200 dark:bg-[#1C1C2D] dark:hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+  // Collect extra fields
+  const coreKeys = new Set([
+    "Company",
+    "Company Name",
+    "Lead ID",
+    "Source",
+    "Lead Source",
+    "Sources",
+    "Status",
+    "Date",
+    "POC Name",
+    "Name",
+    "Contact No.",
+    "Phone",
+    "Email Id",
+    "Email",
+    "Requirement",
+    "Stage",
+    "Cog POC",
+    "Remarks /Updates",
+    "Last Update",
+    "Revenue Estimation (In INR) (Oct 26 - Mar 27)",
+    "Revenue Estimations",
+    "Revenue Estimation",
+    "Retainer Cost",
+    "Retainer cost",
+    "S. No.",
+    "S. No. ",
+    "No.",
+  ]);
+  if (cogPocEmail) {
+    coreKeys.add("POC email");
+    coreKeys.add("Cog POC Email");
+  }
+  if (messageFromProspect) {
+    coreKeys.add("Message from Prospect");
+  }
 
-              {/* Modal Body */}
-              <div className="p-6 overflow-y-auto space-y-5">
-                {/* Quick Summary Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622]/60 border border-gray-100 dark:border-white/5">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Date</span>
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 font-mono" title={rawDate}>{dateVal}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Source / Type</span>
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">{rowSource}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Status</span>
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">{rowStatus || "—"}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Stage</span>
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">{stageVal}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Cog POC</span>
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">{cogPoc}</p>
-                    {cogPocEmail && (
-                      <p className="text-[9px] text-gray-400 dark:text-[#888899] font-mono truncate mt-0.5" title={cogPocEmail}>
-                        {cogPocEmail}
-                      </p>
-                    )}
-                  </div>
-                </div>
+  const extraFields = Object.entries(lead).filter(([k, v]) => {
+    if (k.startsWith("_")) return false;
+    if (coreKeys.has(k)) return false;
+    return String(v || "").trim() !== "";
+  });
 
-                {/* Contact Information */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono mb-2.5">
-                    Contact Details
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
-                      <span className="text-[10px] text-gray-400 font-mono uppercase">POC Name</span>
-                      <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">{pocName}</p>
-                    </div>
-                    <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
-                      <span className="text-[10px] text-gray-400 font-mono uppercase">Contact No.</span>
-                      <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 font-mono">{contactNo}</p>
-                    </div>
-                    <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
-                      <span className="text-[10px] text-gray-400 font-mono uppercase">Email Id</span>
-                      <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 break-all">{emailVal}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Revenue Estimation & Retainer Cost */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono mb-2.5">
-                    Commercials & Revenue Estimation
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-xl border border-emerald-200/60 dark:border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-500/[0.04]">
-                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono uppercase font-semibold">
-                        Revenue Estimation
-                      </span>
-                      <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mt-1 font-mono">
-                        {revenueEst !== "—" && !String(revenueEst).startsWith("₹") ? `₹${revenueEst}` : revenueEst}
-                      </p>
-                    </div>
-                    <div className="p-3.5 rounded-xl border border-indigo-200/60 dark:border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-500/[0.04]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono uppercase font-semibold">
-                          Retainer Cost
-                        </span>
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 uppercase tracking-wide">
-                          Monthly
-                        </span>
-                      </div>
-                      <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300 mt-1 font-mono">
-                        {(() => {
-                          if (retainerCost === "—" || !retainerCost) return "—";
-                          const str = String(retainerCost).trim();
-                          if (/^\d{4}[-/.]\d{1,2}/.test(str)) return str;
-                          return str.startsWith("₹") ? str : `₹${str}`;
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Requirement & Remarks */}
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono">
-                      Requirement
-                    </span>
-                    <p className="mt-1 p-3 text-xs text-gray-800 dark:text-gray-200 bg-gray-50/60 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-xl leading-relaxed whitespace-pre-wrap">
-                      {requirement}
-                    </p>
-                  </div>
-                  {messageFromProspect && (
-                    <div>
-                      <span className="text-[10px] font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono">
-                        Message from Prospect
-                      </span>
-                      <p className="mt-1 p-3 text-xs text-gray-800 dark:text-gray-200 bg-gray-50/60 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-xl leading-relaxed whitespace-pre-wrap">
-                        {messageFromProspect}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono">
-                      Remarks / Updates
-                    </span>
-                    <p className="mt-1 p-3 text-xs text-gray-800 dark:text-gray-200 bg-gray-50/60 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-xl leading-relaxed whitespace-pre-wrap">
-                      {remarks}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Additional Details */}
-                {extraFields.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono mb-2.5">
-                      Additional Sheet Info
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {extraFields.map(([key, val]) => (
-                        <div key={key} className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/40 dark:bg-white/[0.01]">
-                          <span className="text-[10px] font-mono text-gray-400 uppercase">{key}</span>
-                          <p className="text-xs text-gray-800 dark:text-gray-200 mt-0.5 break-words whitespace-pre-wrap">{String(val)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity" onClick={onClose} />
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white dark:bg-[#111118] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[88vh]">
+        {/* Modal Header */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between bg-gray-50/50 dark:bg-[#161622]/50">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-sm">
+              {companyName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white font-sans">
+                  {companyName}
+                </h3>
+                {sNo && (
+                  <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300 border border-gray-200 dark:border-white/10">
+                    S. No. {sNo}
+                  </span>
                 )}
               </div>
+              <span className="text-[11px] font-semibold text-gray-500 dark:text-[#888899]">
+                Source / Type: {rowSource}
+              </span>
             </div>
-          </>
-        );
-      })()}
-    </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onOpenAction && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAction(lead);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-gray-900 transition-all cursor-pointer shadow-xs"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Action / Edit Lead</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 hover:bg-gray-200 dark:bg-[#1C1C2D] dark:hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto space-y-5">
+          {/* Quick Summary Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622]/60 border border-gray-100 dark:border-white/5">
+            <div>
+              <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Date</span>
+              <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 font-mono" title={rawDate}>
+                {dateVal}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Source / Type</span>
+              <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">
+                {rowSource}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Status</span>
+              <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">
+                {rowStatus || "—"}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Stage</span>
+              <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">
+                {stageVal}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-gray-400 dark:text-[#888899]">Cog POC</span>
+              <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">
+                {cogPoc}
+              </p>
+              {cogPocEmail && (
+                <p className="text-[9px] text-gray-400 dark:text-[#888899] font-mono truncate mt-0.5" title={cogPocEmail}>
+                  {cogPocEmail}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div>
+            <h4 className="text-xs font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono mb-2.5">
+              Contact Details
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+                <span className="text-[10px] text-gray-400 font-mono uppercase">POC Name</span>
+                <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5">{pocName}</p>
+              </div>
+              <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+                <span className="text-[10px] text-gray-400 font-mono uppercase">Contact No.</span>
+                <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 font-mono">{contactNo}</p>
+              </div>
+              <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+                <span className="text-[10px] text-gray-400 font-mono uppercase">Email Id</span>
+                <p className="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 break-all">{emailVal}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Revenue Estimation & Retainer Cost */}
+          <div>
+            <h4 className="text-xs font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono mb-2.5">
+              Commercials & Revenue Estimation
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-xl border border-emerald-200/60 dark:border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-500/[0.04]">
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono uppercase font-semibold">
+                  Revenue Estimation
+                </span>
+                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mt-1 font-mono">
+                  {revenueEst !== "—" && !String(revenueEst).startsWith("₹") ? `₹${revenueEst}` : revenueEst}
+                </p>
+              </div>
+              <div className="p-3.5 rounded-xl border border-indigo-200/60 dark:border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-500/[0.04]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono uppercase font-semibold">
+                    Retainer Cost
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 uppercase tracking-wide">
+                    Monthly
+                  </span>
+                </div>
+                <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300 mt-1 font-mono">
+                  {(() => {
+                    if (retainerCost === "—" || !retainerCost) return "—";
+                    const str = String(retainerCost).trim();
+                    if (/^\d{4}[-/.]\d{1,2}/.test(str)) return str;
+                    return str.startsWith("₹") ? str : `₹${str}`;
+                  })()}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Requirement & Remarks */}
+          <div className="space-y-3">
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono">
+                Requirement
+              </span>
+              <p className="mt-1 p-3 text-xs text-gray-800 dark:text-gray-200 bg-gray-50/60 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-xl leading-relaxed whitespace-pre-wrap">
+                {requirement}
+              </p>
+            </div>
+            {messageFromProspect && (
+              <div>
+                <span className="text-[10px] font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono">
+                  Message from Prospect
+                </span>
+                <p className="mt-1 p-3 text-xs text-gray-800 dark:text-gray-200 bg-gray-50/60 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-xl leading-relaxed whitespace-pre-wrap">
+                  {messageFromProspect}
+                </p>
+              </div>
+            )}
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono">
+                Remarks / Updates
+              </span>
+              <p className="mt-1 p-3 text-xs text-gray-800 dark:text-gray-200 bg-gray-50/60 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-xl leading-relaxed whitespace-pre-wrap">
+                {remarks}
+              </p>
+            </div>
+          </div>
+
+          {/* Conversation Trail / Touchpoint History */}
+          <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-white/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider font-mono">
+                  Conversation Trail / Touchpoints ({conversations.length})
+                </h4>
+              </div>
+              {onOpenAction && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenAction(lead);
+                  }}
+                  className="text-xs text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Log Touchpoint</span>
+                </button>
+              )}
+            </div>
+
+            {loadingConversations ? (
+              <div className="p-4 text-center text-xs text-gray-400 font-mono bg-gray-50/50 dark:bg-white/[0.01] rounded-xl border border-gray-100 dark:border-white/5">
+                Loading conversation trail...
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="p-4 text-center rounded-xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/30 dark:bg-white/[0.01]">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  No touchpoints recorded yet for this lead.
+                </p>
+                {onOpenAction && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenAction(lead);
+                    }}
+                    className="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    + Record Call or WhatsApp Note
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                {conversations.map((c) => {
+                  let Icon = MessageCircle;
+                  if (c.conversation_type === "Call") Icon = Phone;
+                  else if (c.conversation_type === "Email") Icon = Mail;
+                  else if (c.conversation_type === "Meeting") Icon = CalendarIcon;
+
+                  return (
+                    <div
+                      key={c.id}
+                      className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 font-bold text-[11px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-mono">
+                            <Icon className="w-3 h-3" />
+                            {c.conversation_type}
+                          </span>
+                          <span className="font-mono text-gray-500 dark:text-gray-400 text-[11px]">
+                            {c.date}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1 font-sans">
+                          <User className="w-3 h-3 text-gray-400 shrink-0" />
+                          Added by <span className="font-semibold text-gray-700 dark:text-gray-300">{c.author || cogPoc || "Cog Team"}</span>
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                        {c.message}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Additional Details */}
+          {extraFields.length > 0 && (
+            <div>
+              <h4 className="text-xs font-bold text-gray-400 dark:text-[#888899] uppercase tracking-wider font-mono mb-2.5">
+                Additional Sheet Info
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {extraFields.map(([key, val]) => (
+                  <div key={key} className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/40 dark:bg-white/[0.01]">
+                    <span className="text-[10px] font-mono text-gray-400 uppercase">{key}</span>
+                    <p className="text-xs text-gray-800 dark:text-gray-200 mt-0.5 break-words whitespace-pre-wrap">{String(val)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

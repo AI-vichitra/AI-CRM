@@ -70,10 +70,11 @@ export const api = {
     apiFetch<{ subject: string; html: string; recipients: string[]; is_test_mode: boolean; new_leads_count: number; hot_leads_count: number }>(`/api/dashboard/preview-daily-leads-digest${overrideRecipient ? `?override_recipient=${encodeURIComponent(overrideRecipient)}` : ""}`),
   previewProposalsFollowupAlert: (overrideRecipient?: string) =>
     apiFetch<{ subject: string; html: string; recipients: string[]; is_test_mode: boolean; proposals_today_count: number; followups_due_count: number }>(`/api/dashboard/preview-proposals-followup-alert${overrideRecipient ? `?override_recipient=${encodeURIComponent(overrideRecipient)}` : ""}`),
-  getConversations: (leadId?: string, date?: string) => {
+  getConversations: (leadId?: string, date?: string, leadKey?: string) => {
     const params = new URLSearchParams();
     if (leadId) params.set("lead_id", leadId);
     if (date) params.set("date", date);
+    if (leadKey) params.set("lead_key", leadKey);
     const query = params.toString() ? `?${params.toString()}` : "";
     return apiFetch<Conversation[]>(`/api/conversations/${query}`);
   },
