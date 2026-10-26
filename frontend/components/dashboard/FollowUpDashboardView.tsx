@@ -23,6 +23,7 @@ import {
   PhoneCall,
   Video,
   ArrowRight,
+  ArrowUpDown,
   Trash2,
   CalendarX,
   Eye,
@@ -52,14 +53,15 @@ export interface ProcessedLead extends Record<string, any> {
   _isCall: boolean;
 }
 
-// Helper to normalize and parse dates: DD/MM/YYYY, D/M/YYYY, YYYY-MM-DD, DD-MM-YYYY
+// Helper to normalize and parse dates: DD/MM/YYYY, D/M/YYYY, YYYY-MM-DD, DD-MM-YYYY, timestamps
 export const parseFollowUpDate = (dateVal: any): Date | null => {
   if (!dateVal) return null;
   const str = String(dateVal).trim();
   if (!str || str === "—" || str.toLowerCase() === "placeholder") return null;
 
-  // Split date by separators
-  const parts = str.split(/[-/.]/);
+  // Isolate the date part (before whitespace or ISO T separator)
+  const datePart = str.split(/[T\s]/)[0];
+  const parts = datePart.split(/[-/.]/);
   if (parts.length === 3) {
     const p0 = parseInt(parts[0], 10);
     const p1 = parseInt(parts[1], 10);
@@ -72,11 +74,17 @@ export const parseFollowUpDate = (dateVal: any): Date | null => {
       }
       // DD-MM-YYYY or DD/MM/YYYY
       if (parts[2].length === 4) {
+        if (p0 <= 12 && p1 > 12) {
+          return new Date(p2, p0 - 1, p1);
+        }
         return new Date(p2, p1 - 1, p0);
       }
-      // YY format
+      // YY format (DD-MM-YY or DD/MM/YY)
       if (parts[2].length === 2) {
-        const fullYear = 2000 + p2;
+        const fullYear = p2 < 50 ? 2000 + p2 : 1900 + p2;
+        if (p0 <= 12 && p1 > 12) {
+          return new Date(fullYear, p0 - 1, p1);
+        }
         return new Date(fullYear, p1 - 1, p0);
       }
     }
@@ -86,7 +94,25 @@ export const parseFollowUpDate = (dateVal: any): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
-// Format a date cleanly as YYYY-MM-DD for storage
+// Helper to format a date cleanly as YYYY-MM-DD for UI display
+export const formatDisplayDate = (dateVal: any): string => {
+  if (!dateVal) return "—";
+  if (dateVal instanceof Date) {
+    if (isNaN(dateVal.getTime())) return "—";
+    const yyyy = dateVal.getFullYear();
+    const mm = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const dd = String(dateVal.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const parsed = parseFollowUpDate(dateVal);
+  if (!parsed) return String(dateVal).trim() || "—";
+  const yyyy = parsed.getFullYear();
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+// Format a date cleanly as DD/MM/YYYY for storage
 export const formatDateString = (d: Date): string => {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -180,42 +206,72 @@ export default function FollowUpDashboardView({
     return d;
   }, []);
 
+  // Helper to extract follow-up / scheduled date across any column alias
+  const getFollowUpVal = (row: Record<string, any>): string => {
+    if (row[followUpCol] && String(row[followUpCol]).trim() !== "" && String(row[followUpCol]).trim() !== "—") {
+      return String(row[followUpCol]).trim();
+    }
+    if (row[deadlineCol] && String(row[deadlineCol]).trim() !== "" && String(row[deadlineCol]).trim() !== "—") {
+      return String(row[deadlineCol]).trim();
+    }
+    for (const [k, v] of Object.entries(row)) {
+      const kl = k.toLowerCase().replace(/[\s_-]+/g, "");
+      if ((kl.includes("followup") || kl.includes("follow") || kl.includes("deadline")) && kl.includes("date")) {
+        const val = String(v || "").trim();
+        if (val && val !== "—") return val;
+      }
+    }
+    return "";
+  };
+
+  // Sort states: default to "date" and "desc" (recent date first)
+  const [sortColumn, setSortColumn] = useState<"date" | "company" | "leadId" | "poc" | "stage">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  const handleSort = (col: "date" | "company" | "leadId" | "poc" | "stage") => {
+    if (sortColumn === col) {
+      setSortDirection(prev => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(col);
+      setSortDirection(col === "date" ? "desc" : "asc");
+    }
+  };
+
   // Process and classify all leads with follow-up or deadline dates
   const processedLeads = useMemo<ProcessedLead[]>(() => {
     if (!sheetData?.rows) return [];
 
-    return sheetData.rows.map(row => {
-      const rowDateVal = row[followUpCol] || row[deadlineCol];
+    const leads: ProcessedLead[] = [];
+
+    sheetData.rows.forEach(row => {
+      const rowDateVal = getFollowUpVal(row);
       const parsedDate = parseFollowUpDate(rowDateVal);
-      
-      let dateKey = "";
-      let isOverdue = false;
-      let isToday = false;
-      let isUpcoming = false;
-      let daysDiff = 0;
+      if (!parsedDate) return;
+
+      const compareDate = new Date(parsedDate);
+      compareDate.setHours(0, 0, 0, 0);
+
+      const dateKey = `${compareDate.getFullYear()}-${String(compareDate.getMonth() + 1).padStart(2, "0")}-${String(compareDate.getDate()).padStart(2, "0")}`;
+
+      const diffTime = compareDate.getTime() - today.getTime();
+      const daysDiff = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
       const stageVal = String(row[stageCol] || "").toLowerCase();
       const isWonOrLost = ["won", "closed won", "lost", "closed lost", "dead"].some(x => stageVal.includes(x));
 
-      if (parsedDate) {
-        const compareDate = new Date(parsedDate);
-        compareDate.setHours(0, 0, 0, 0);
-        
-        dateKey = `${compareDate.getFullYear()}-${String(compareDate.getMonth() + 1).padStart(2, "0")}-${String(compareDate.getDate()).padStart(2, "0")}`;
-        
-        const diffTime = compareDate.getTime() - today.getTime();
-        daysDiff = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      let isToday = false;
+      let isOverdue = false;
+      let isUpcoming = false;
 
-        if (daysDiff === 0) {
-          isToday = true;
-        } else if (daysDiff < 0) {
-          // Only flag as overdue if not already Won/Lost
-          if (!isWonOrLost) {
-            isOverdue = true;
-          }
-        } else {
-          isUpcoming = true;
+      if (daysDiff === 0) {
+        isToday = true;
+      } else if (daysDiff < 0) {
+        // Only flag as overdue if not already Won/Lost
+        if (!isWonOrLost) {
+          isOverdue = true;
         }
+      } else {
+        isUpcoming = true;
       }
 
       // Check if it has a meeting or call scheduled
@@ -223,7 +279,7 @@ export default function FollowUpDashboardView({
       const isMeeting = introCallVal.includes("meeting") || introCallVal.includes("scheduled") || introCallVal.includes("demo");
       const isCall = !isMeeting; // Default interaction type
 
-      return {
+      leads.push({
         ...row,
         _parsedDate: parsedDate,
         _dateKey: dateKey,
@@ -233,8 +289,18 @@ export default function FollowUpDashboardView({
         _isUpcoming: isUpcoming,
         _isMeeting: isMeeting,
         _isCall: isCall,
-      };
-    }).filter((r): r is ProcessedLead => r._parsedDate !== null);
+      });
+    });
+
+    // Default sort by scheduled date descending (most recent date first)
+    leads.sort((a, b) => {
+      const timeA = a._parsedDate.getTime();
+      const timeB = b._parsedDate.getTime();
+      if (timeA !== timeB) return timeB - timeA;
+      return (Number(b._row_num) || 0) - (Number(a._row_num) || 0);
+    });
+
+    return leads;
   }, [sheetData, followUpCol, deadlineCol, stageCol, introCallCol, today]);
 
   // Unique POC list
@@ -247,9 +313,9 @@ export default function FollowUpDashboardView({
     return Array.from(s).sort();
   }, [processedLeads, pocCol]);
 
-  // Filtered leads based on search across ALL columns, POC, and active filter tab
+  // Filtered leads based on search across ALL columns, POC, active filter tab, and date sorting
   const filteredLeads = useMemo(() => {
-    return processedLeads.filter(lead => {
+    const list = processedLeads.filter(lead => {
       const q = searchTerm.toLowerCase().trim();
       const matchesSearch = !q || Object.entries(lead).some(([k, val]) => {
         if (k.startsWith("_")) return false;
@@ -264,7 +330,44 @@ export default function FollowUpDashboardView({
 
       return matchesSearch && matchesPOC && matchesTab;
     });
-  }, [processedLeads, searchTerm, selectedPOC, activeTab, pocCol]);
+
+    // Sort according to active sort column & direction (default: recent date first)
+    list.sort((a, b) => {
+      if (sortColumn === "date") {
+        const timeA = a._parsedDate ? a._parsedDate.getTime() : 0;
+        const timeB = b._parsedDate ? b._parsedDate.getTime() : 0;
+        if (timeA !== timeB) {
+          return sortDirection === "desc" ? timeB - timeA : timeA - timeB;
+        }
+      } else if (sortColumn === "company") {
+        const valA = String(a[companyCol] || "");
+        const valB = String(b[companyCol] || "");
+        const cmp = valA.localeCompare(valB);
+        if (cmp !== 0) return sortDirection === "asc" ? cmp : -cmp;
+      } else if (sortColumn === "poc") {
+        const valA = String(a[pocCol] || "");
+        const valB = String(b[pocCol] || "");
+        const cmp = valA.localeCompare(valB);
+        if (cmp !== 0) return sortDirection === "asc" ? cmp : -cmp;
+      } else if (sortColumn === "stage") {
+        const valA = String(a[stageCol] || "");
+        const valB = String(b[stageCol] || "");
+        const cmp = valA.localeCompare(valB);
+        if (cmp !== 0) return sortDirection === "asc" ? cmp : -cmp;
+      } else if (sortColumn === "leadId") {
+        const rowA = Number(a._row_num) || 0;
+        const rowB = Number(b._row_num) || 0;
+        if (rowA !== rowB) return sortDirection === "asc" ? rowA - rowB : rowB - rowA;
+      }
+
+      // Secondary fallback: newest row first
+      const rowA = Number(a._row_num) || 0;
+      const rowB = Number(b._row_num) || 0;
+      return rowB - rowA;
+    });
+
+    return list;
+  }, [processedLeads, searchTerm, selectedPOC, activeTab, pocCol, companyCol, stageCol, sortColumn, sortDirection]);
 
   // Top Metrics
   const stats = useMemo(() => {
@@ -1019,14 +1122,65 @@ export default function FollowUpDashboardView({
           <table className="w-full border-collapse text-left text-xs font-sans">
             <thead>
               <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161622]/40 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-[#888899]">
-                <th className="py-3 px-4">Lead ID</th>
-                <th className="py-3 px-4">Company</th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("leadId")}
+                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                  >
+                    <span>Lead ID</span>
+                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "leadId" ? "text-emerald-500" : "text-gray-400"}`} />
+                  </button>
+                </th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("company")}
+                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                  >
+                    <span>Company</span>
+                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "company" ? "text-emerald-500" : "text-gray-400"}`} />
+                  </button>
+                </th>
                 <th className="py-3 px-4">Contact</th>
-                <th className="py-3 px-4">Scheduled Date</th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("date")}
+                    className="flex items-center gap-1.5 uppercase tracking-wider text-gray-900 dark:text-white cursor-pointer group"
+                    title="Click to toggle recent/oldest date sorting"
+                  >
+                    <span>Scheduled Date</span>
+                    <ArrowUpDown className={`w-3 h-3 ${sortColumn === "date" ? "text-emerald-500" : "text-gray-400"}`} />
+                    {sortColumn === "date" && (
+                      <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40">
+                        {sortDirection === "desc" ? "Recent First" : "Oldest First"}
+                      </span>
+                    )}
+                  </button>
+                </th>
                 <th className="py-3 px-4">Urgency / Aging</th>
                 <th className="py-3 px-4">Follow-Up Notes</th>
-                <th className="py-3 px-4">Cog POC</th>
-                <th className="py-3 px-4">Stage</th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("poc")}
+                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                  >
+                    <span>Cog POC</span>
+                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "poc" ? "text-emerald-500" : "text-gray-400"}`} />
+                  </button>
+                </th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("stage")}
+                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                  >
+                    <span>Stage</span>
+                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "stage" ? "text-emerald-500" : "text-gray-400"}`} />
+                  </button>
+                </th>
                 <th className="py-3 px-4 text-center">Quick Reachout</th>
                 <th className="py-3 px-4 text-center">Reschedule</th>
                 <th className="py-3 px-4 text-center">Manage</th>
@@ -1045,6 +1199,7 @@ export default function FollowUpDashboardView({
                   const poc = String(lead[pocCol] || "Unassigned");
                   const stage = String(lead[stageCol] || "");
                   const dateStr = lead[followUpCol] || lead[deadlineCol] || "";
+                  const displayDate = formatDisplayDate(lead._parsedDate || dateStr);
                   const daysDiff = lead._daysDiff;
                   const noteText = getCombinedNotes(lead);
 
@@ -1074,8 +1229,8 @@ export default function FollowUpDashboardView({
                       <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
                         {contact}
                       </td>
-                      <td className="py-3 px-4 font-mono text-gray-700 dark:text-gray-300 font-semibold">
-                        {dateStr}
+                      <td className="py-3 px-4 font-mono text-gray-700 dark:text-gray-300 font-semibold" title={String(dateStr)}>
+                        {displayDate}
                       </td>
                       <td className="py-3 px-4">
                         {lead._isToday ? (
