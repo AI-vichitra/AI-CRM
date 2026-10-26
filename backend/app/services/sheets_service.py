@@ -598,11 +598,17 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
         sheet_id = _extract_sheet_id(sheet_url)
         gid = _extract_gid(sheet_url)
         
-        # 1. Fetch spreadsheet metadata to map gid to title
+        # 1. Fetch spreadsheet metadata to map gid to title or match range_name
         metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         sheets = metadata.get("sheets", [])
         target_title = None
-        if gid:
+        if range_name:
+            for s in sheets:
+                props = s.get("properties", {})
+                if props.get("title", "").strip().lower() == range_name.strip().lower():
+                    target_title = props.get("title")
+                    break
+        if not target_title and gid:
             for s in sheets:
                 props = s.get("properties", {})
                 if str(props.get("sheetId")) == str(gid):
@@ -610,7 +616,7 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
                     break
         if not target_title and sheets:
             target_title = sheets[0].get("properties", {}).get("title")
-        final_range = target_title if target_title else range_name
+        final_range = target_title if target_title else (range_name or "Active Leads")
         
         # 2. Fetch headers to order cell values correctly
         result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=f"'{final_range}'!A1:ZZ1").execute()
@@ -678,20 +684,25 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
                 val = str(clean_data.get("Date")).strip()
             row_values.append(val)
             
-        # 4. Append to sheet
-        body = {
-            "values": [row_values]
-        }
-        last_col_letter = _get_column_letter(len(deduped_headers))
-        service.spreadsheets().values().append(
+        # 4. Find the EXACT next row number in the sheet using Column A & B
+        # This guarantees the row is written starting at column A (no column-shifting bugs)
+        existing_res = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"'{final_range}'!A:{last_col_letter}",
+            range=f"'{final_range}'!A:B"
+        ).execute()
+        existing_rows = existing_res.get("values", [])
+        next_row_num = max(len(existing_rows) + 1, 2)
+
+        last_col_letter = _get_column_letter(len(row_values))
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=f"'{final_range}'!A{next_row_num}:{last_col_letter}{next_row_num}",
             valueInputOption="USER_ENTERED",
-            body=body
+            body={"values": [row_values]}
         ).execute()
         
         _cache.clear()
-        return {"ok": True}
+        return {"ok": True, "row_num": next_row_num}
     except Exception as e:
         if "403" in str(e) or "permission" in str(e).lower():
             overrides = _load_overrides()
@@ -727,7 +738,13 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
                 if "active leads from sept" in t.strip().lower():
                     target_title = t
                     break
-        elif gid:
+        elif range_name:
+            for s in sheets:
+                props = s.get("properties", {})
+                if props.get("title", "").strip().lower() == range_name.strip().lower():
+                    target_title = props.get("title")
+                    break
+        if not target_title and gid:
             for s in sheets:
                 props = s.get("properties", {})
                 if str(props.get("sheetId")) == str(gid):
@@ -735,7 +752,7 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
                     break
         if not target_title and sheets:
             target_title = sheets[0].get("properties", {}).get("title")
-        final_range = target_title if target_title else range_name
+        final_range = target_title if target_title else (range_name or "Active Leads")
         
         result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=f"'{final_range}'!A1:ZZ1").execute()
         values = result.get("values", [])
@@ -843,7 +860,13 @@ def delete_lead_row(sheet_url: str, range_name: str, row_num: int) -> dict:
                 if "active leads from sept" in t.strip().lower():
                     target_sheet_id = s.get("properties", {}).get("sheetId")
                     break
-        elif gid:
+        elif range_name:
+            for s in sheets:
+                props = s.get("properties", {})
+                if props.get("title", "").strip().lower() == range_name.strip().lower():
+                    target_sheet_id = props.get("sheetId")
+                    break
+        if target_sheet_id is None and gid:
             for s in sheets:
                 props = s.get("properties", {})
                 if str(props.get("sheetId")) == str(gid):

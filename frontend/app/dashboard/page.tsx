@@ -253,7 +253,8 @@ function DashboardContent() {
 
     try {
       setRefreshing(true);
-      await api.deleteLead(rowNum);
+      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (row._sheet_tab || "Active Leads");
+      await api.deleteLead(rowNum, targetTabRange);
       toast.success("Lead deleted successfully");
       await loadData(false, true);
     } catch (err: any) {
@@ -271,20 +272,28 @@ function DashboardContent() {
         (selectedActionLead && selectedActionLead._row_num) ||
         (selectedLead && selectedLead._row_num);
 
+      const targetTabRange = tab === "internal_leads" 
+        ? "Internal Leads" 
+        : ((leadDataInput._sheet_tab || (selectedActionLead && selectedActionLead._sheet_tab) || (selectedLead && selectedLead._sheet_tab)) || "Active Leads");
+
       if (targetRowNum) {
         const baseLead =
           (selectedActionLead && selectedActionLead._row_num === targetRowNum)
             ? selectedActionLead
             : selectedLead;
         const mergedData = baseLead ? { ...baseLead, ...leadDataInput } : leadDataInput;
-        await api.updateLead(targetRowNum, mergedData);
+        await api.updateLead(targetRowNum, mergedData, targetTabRange);
         toast.success("Lead updated successfully");
         if (selectedActionLead && selectedActionLead._row_num === targetRowNum) {
           setSelectedActionLead(mergedData);
         }
       } else {
-        await api.addLead(leadDataInput);
+        await api.addLead(leadDataInput, targetTabRange);
         toast.success("Lead added successfully");
+        // Reset filters so the newly added lead is immediately visible
+        setSelectedMonth("All");
+        setSelectedKpiTab("Total Leads");
+        setSearchTerm("");
       }
       await loadData(false, true);
     } catch (err: any) {
@@ -303,8 +312,9 @@ function DashboardContent() {
         toast.error("Invalid lead row index");
         return;
       }
+      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (row._sheet_tab || "Active Leads");
       const updatedRow = { ...row, Stage: newStage };
-      await api.updateLead(rowNum, updatedRow);
+      await api.updateLead(rowNum, updatedRow, targetTabRange);
       toast.success(`Proposal stage moved to "${newStage}"`);
       await loadData(false, true);
     } catch (err: any) {
