@@ -23,7 +23,6 @@ import {
   PhoneCall,
   Video,
   ArrowRight,
-  ArrowUpDown,
   Trash2,
   CalendarX,
   Eye,
@@ -224,19 +223,6 @@ export default function FollowUpDashboardView({
     return "";
   };
 
-  // Sort states: default to "date" and "desc" (recent date first)
-  const [sortColumn, setSortColumn] = useState<"date" | "company" | "leadId" | "poc" | "stage">("date");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-
-  const handleSort = (col: "date" | "company" | "leadId" | "poc" | "stage") => {
-    if (sortColumn === col) {
-      setSortDirection(prev => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortColumn(col);
-      setSortDirection(col === "date" ? "desc" : "asc");
-    }
-  };
-
   // Process and classify all leads with follow-up or deadline dates
   const processedLeads = useMemo<ProcessedLead[]>(() => {
     if (!sheetData?.rows) return [];
@@ -313,7 +299,7 @@ export default function FollowUpDashboardView({
     return Array.from(s).sort();
   }, [processedLeads, pocCol]);
 
-  // Filtered leads based on search across ALL columns, POC, active filter tab, and date sorting
+  // Filtered leads based on search across ALL columns, POC, and active filter tab
   const filteredLeads = useMemo(() => {
     const list = processedLeads.filter(lead => {
       const q = searchTerm.toLowerCase().trim();
@@ -331,35 +317,13 @@ export default function FollowUpDashboardView({
       return matchesSearch && matchesPOC && matchesTab;
     });
 
-    // Sort according to active sort column & direction (default: recent date first)
+    // Default sort by scheduled date descending (most recent date first)
     list.sort((a, b) => {
-      if (sortColumn === "date") {
-        const timeA = a._parsedDate ? a._parsedDate.getTime() : 0;
-        const timeB = b._parsedDate ? b._parsedDate.getTime() : 0;
-        if (timeA !== timeB) {
-          return sortDirection === "desc" ? timeB - timeA : timeA - timeB;
-        }
-      } else if (sortColumn === "company") {
-        const valA = String(a[companyCol] || "");
-        const valB = String(b[companyCol] || "");
-        const cmp = valA.localeCompare(valB);
-        if (cmp !== 0) return sortDirection === "asc" ? cmp : -cmp;
-      } else if (sortColumn === "poc") {
-        const valA = String(a[pocCol] || "");
-        const valB = String(b[pocCol] || "");
-        const cmp = valA.localeCompare(valB);
-        if (cmp !== 0) return sortDirection === "asc" ? cmp : -cmp;
-      } else if (sortColumn === "stage") {
-        const valA = String(a[stageCol] || "");
-        const valB = String(b[stageCol] || "");
-        const cmp = valA.localeCompare(valB);
-        if (cmp !== 0) return sortDirection === "asc" ? cmp : -cmp;
-      } else if (sortColumn === "leadId") {
-        const rowA = Number(a._row_num) || 0;
-        const rowB = Number(b._row_num) || 0;
-        if (rowA !== rowB) return sortDirection === "asc" ? rowA - rowB : rowB - rowA;
+      const timeA = a._parsedDate ? a._parsedDate.getTime() : 0;
+      const timeB = b._parsedDate ? b._parsedDate.getTime() : 0;
+      if (timeA !== timeB) {
+        return timeB - timeA; // Recent date first
       }
-
       // Secondary fallback: newest row first
       const rowA = Number(a._row_num) || 0;
       const rowB = Number(b._row_num) || 0;
@@ -367,7 +331,7 @@ export default function FollowUpDashboardView({
     });
 
     return list;
-  }, [processedLeads, searchTerm, selectedPOC, activeTab, pocCol, companyCol, stageCol, sortColumn, sortDirection]);
+  }, [processedLeads, searchTerm, selectedPOC, activeTab, pocCol]);
 
   // Top Metrics
   const stats = useMemo(() => {
@@ -1122,65 +1086,14 @@ export default function FollowUpDashboardView({
           <table className="w-full border-collapse text-left text-xs font-sans">
             <thead>
               <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161622]/40 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-[#888899]">
-                <th className="py-3 px-4">
-                  <button
-                    type="button"
-                    onClick={() => handleSort("leadId")}
-                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
-                  >
-                    <span>Lead ID</span>
-                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "leadId" ? "text-emerald-500" : "text-gray-400"}`} />
-                  </button>
-                </th>
-                <th className="py-3 px-4">
-                  <button
-                    type="button"
-                    onClick={() => handleSort("company")}
-                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
-                  >
-                    <span>Company</span>
-                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "company" ? "text-emerald-500" : "text-gray-400"}`} />
-                  </button>
-                </th>
+                <th className="py-3 px-4">Lead ID</th>
+                <th className="py-3 px-4">Company</th>
                 <th className="py-3 px-4">Contact</th>
-                <th className="py-3 px-4">
-                  <button
-                    type="button"
-                    onClick={() => handleSort("date")}
-                    className="flex items-center gap-1.5 uppercase tracking-wider text-gray-900 dark:text-white cursor-pointer group"
-                    title="Click to toggle recent/oldest date sorting"
-                  >
-                    <span>Scheduled Date</span>
-                    <ArrowUpDown className={`w-3 h-3 ${sortColumn === "date" ? "text-emerald-500" : "text-gray-400"}`} />
-                    {sortColumn === "date" && (
-                      <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40">
-                        {sortDirection === "desc" ? "Recent First" : "Oldest First"}
-                      </span>
-                    )}
-                  </button>
-                </th>
+                <th className="py-3 px-4">Scheduled Date</th>
                 <th className="py-3 px-4">Urgency / Aging</th>
                 <th className="py-3 px-4">Follow-Up Notes</th>
-                <th className="py-3 px-4">
-                  <button
-                    type="button"
-                    onClick={() => handleSort("poc")}
-                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
-                  >
-                    <span>Cog POC</span>
-                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "poc" ? "text-emerald-500" : "text-gray-400"}`} />
-                  </button>
-                </th>
-                <th className="py-3 px-4">
-                  <button
-                    type="button"
-                    onClick={() => handleSort("stage")}
-                    className="flex items-center gap-1 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white cursor-pointer"
-                  >
-                    <span>Stage</span>
-                    <ArrowUpDown className={`w-2.5 h-2.5 ${sortColumn === "stage" ? "text-emerald-500" : "text-gray-400"}`} />
-                  </button>
-                </th>
+                <th className="py-3 px-4">Cog POC</th>
+                <th className="py-3 px-4">Stage</th>
                 <th className="py-3 px-4 text-center">Quick Reachout</th>
                 <th className="py-3 px-4 text-center">Reschedule</th>
                 <th className="py-3 px-4 text-center">Manage</th>
