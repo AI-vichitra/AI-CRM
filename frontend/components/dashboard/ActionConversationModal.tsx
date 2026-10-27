@@ -96,6 +96,43 @@ const formatDateStr = (d: Date): string => {
   return `${y}-${m}-${day}`;
 };
 
+// Helper to parse and format any date string cleanly as YYYY-MM-DD for HTML date inputs
+const formatDateForInput = (val: any): string => {
+  if (!val) return "";
+  const str = String(val).trim();
+  if (!str || str === "—" || str.toLowerCase() === "placeholder") return "";
+  const parts = str.split(/[T\s]/)[0].split(/[-/.]/);
+  if (parts.length === 3) {
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    const p2 = parseInt(parts[2], 10);
+    if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
+      if (parts[0].length === 4) {
+        return `${p0}-${String(p1).padStart(2, "0")}-${String(p2).padStart(2, "0")}`;
+      }
+      if (parts[2].length === 4) {
+        if (p0 <= 12 && p1 > 12) {
+          return `${p2}-${String(p0).padStart(2, "0")}-${String(p1).padStart(2, "0")}`;
+        }
+        return `${p2}-${String(p1).padStart(2, "0")}-${String(p0).padStart(2, "0")}`;
+      }
+      if (parts[2].length === 2) {
+        const fullYear = p2 < 50 ? 2000 + p2 : 1900 + p2;
+        if (p0 <= 12 && p1 > 12) {
+          return `${fullYear}-${String(p0).padStart(2, "0")}-${String(p1).padStart(2, "0")}`;
+        }
+        return `${fullYear}-${String(p1).padStart(2, "0")}-${String(p0).padStart(2, "0")}`;
+      }
+    }
+  }
+  const parsed = Date.parse(str);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  return str;
+};
+
 // Helper to parse string dates into Date
 const parseDateSafe = (val: any): Date => {
   if (!val) return new Date();
@@ -152,6 +189,7 @@ export default function ActionConversationModal({
   const [editStage, setEditStage] = useState("Lead");
   const [editStatus, setEditStatus] = useState("Hot");
   const [editFollowUpDate, setEditFollowUpDate] = useState("");
+  const [editDeadline, setEditDeadline] = useState("");
   const [editRemarks, setEditRemarks] = useState("");
   const [editMessageFromProspect, setEditMessageFromProspect] = useState("");
   const [editIntroCall, setEditIntroCall] = useState("");
@@ -186,7 +224,7 @@ export default function ActionConversationModal({
 
       // Populate lead edit fields
       setEditCompany(lead["Company"] || lead["Company Name"] || "");
-      setEditDate(lead["Date"] || lead["date"] || formatDateStr(new Date()));
+      setEditDate(formatDateForInput(lead["Date"] || lead["date"] || formatDateStr(new Date())));
       setEditCogPoc(lead["Cog POC"] || lead["Cog POC Name"] || currentUser?.name || "");
       setEditCogPocEmail(lead["POC email"] || lead["Cog POC Email"] || currentUser?.email || "");
       setEditSource(lead["Lead Source"] || lead["Source"] || lead["Sources"] || "");
@@ -222,7 +260,8 @@ export default function ActionConversationModal({
       // Advanced Pipeline
       setEditStage(lead["Stage"] || lead["Lead Status"] || "Lead");
       setEditStatus(lead["Status"] || lead["Lead"] || "Hot");
-      setEditFollowUpDate(lead["Follow up date"] || "");
+      setEditFollowUpDate(formatDateForInput(lead["Follow up date"] || lead["Follow-up Date"] || lead["follow up date"] || ""));
+      setEditDeadline(formatDateForInput(lead["Deadline"] || lead["deadline"] || lead["Due Date"] || lead["Due"] || ""));
       setEditRemarks(lead["Remarks /Updates"] || lead["Last Update"] || "");
       setEditMessageFromProspect(lead["Message from Prospect"] || "");
       setEditIntroCall(lead["Intro Call"] || "");
@@ -425,6 +464,8 @@ export default function ActionConversationModal({
         "Stage": editStage,
         "Status": editStatus,
         "Follow up date": editFollowUpDate,
+        "Deadline": editDeadline,
+        "Due Date": editDeadline,
         "Remarks /Updates": editRemarks,
         "Message from Prospect": editMessageFromProspect,
         "Intro Call": editIntroCall,
@@ -468,9 +509,19 @@ export default function ActionConversationModal({
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                POC: {editCogPoc || "Unassigned"} • {editSource || "Direct"}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 flex-wrap">
+                <span>POC: {editCogPoc || "Unassigned"} • {editSource || "Direct"}</span>
+                {editFollowUpDate && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-full border border-purple-200/50 dark:border-purple-800/30">
+                    Follow-up: {editFollowUpDate}
+                  </span>
+                )}
+                {editDeadline && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-full border border-red-200/50 dark:border-red-800/30">
+                    Deadline: {editDeadline}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -814,7 +865,7 @@ export default function ActionConversationModal({
                   <Layers className="w-4 h-4 text-purple-500" />
                   <span>Pipeline & Follow-ups</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block mb-1">
                       Stage
@@ -822,7 +873,7 @@ export default function ActionConversationModal({
                     <select
                       value={editStage}
                       onChange={(e) => setEditStage(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white outline-none focus:border-purple-500 font-semibold"
+                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white outline-none focus:border-purple-500 font-semibold cursor-pointer"
                     >
                       {STAGE_OPTIONS.map((stg) => (
                         <option key={stg} value={stg}>
@@ -839,7 +890,7 @@ export default function ActionConversationModal({
                     <select
                       value={editStatus}
                       onChange={(e) => setEditStatus(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white outline-none focus:border-purple-500 font-semibold"
+                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white outline-none focus:border-purple-500 font-semibold cursor-pointer"
                     >
                       {STATUS_OPTIONS.map((st) => (
                         <option key={st} value={st}>
@@ -860,6 +911,21 @@ export default function ActionConversationModal({
                       className="w-full px-3 py-2 text-xs bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white outline-none focus:border-purple-500 font-mono"
                     />
                   </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                      Deadline Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editDeadline}
+                      onChange={(e) => setEditDeadline(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white outline-none focus:border-purple-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
                   <div>
                     <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block mb-1">

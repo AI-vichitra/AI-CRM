@@ -330,6 +330,13 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                             row_dict["Lead Status"] = norm_stg
 
                     # Cross-populate core aliases so details and tables always find values
+                    deadline_val = row_dict.get("Deadline") or row_dict.get("deadline") or row_dict.get("Due Date") or row_dict.get("Due") or ""
+                    row_dict["Deadline"] = deadline_val
+                    row_dict["deadline"] = deadline_val
+
+                    follow_val = row_dict.get("Follow up date") or row_dict.get("Follow Up Date") or row_dict.get("follow up date") or ""
+                    row_dict["Follow up date"] = follow_val
+
                     ret_cost = row_dict.get("Retainer cost") or row_dict.get("Retainer Cost") or ""
                     row_dict["Retainer cost"] = ret_cost
                     row_dict["Retainer Cost"] = ret_cost
@@ -649,6 +656,8 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
             "Status": clean_data.get("Status") or clean_data.get("Lead", ""),
             "Lead Status": clean_data.get("Lead Status") or clean_data.get("Stage", ""),
             "Stage": clean_data.get("Stage") or clean_data.get("Lead Status", ""),
+            "Deadline": clean_data.get("Deadline") or clean_data.get("deadline", "") or clean_data.get("Due Date", "") or clean_data.get("Due", ""),
+            "Follow up date": clean_data.get("Follow up date") or clean_data.get("follow up date", "") or clean_data.get("Follow Up Date", ""),
         }
         for ak, av in alias_map.items():
             if av and not clean_data.get(ak):
@@ -660,7 +669,8 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
             "Company POC Phone Number", "Cog POC Name", "Date", "POC Name", "Lead Source",
             "Retainer Cost", "Retainer cost", "Lead Status", "Lead", "Stage", "Status",
             "Revenue Estimations", "Revenue Estimation (In INR) (Oct 26 - Mar 27)",
-            "Name", "Phone", "Email", "Source", "Contact No.", "Email Id"
+            "Name", "Phone", "Email", "Source", "Contact No.", "Email Id",
+            "Deadline", "deadline", "Due Date", "Due", "Follow up date", "Follow Up Date", "follow up date"
         }
         new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and k not in ui_aliases and k != "Lead ID" and v != ""]
         if new_cols:
@@ -786,13 +796,15 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
             "Lead Status": clean_data.get("Lead Status") or clean_data.get("Stage", ""),
             "Status": clean_data.get("Status") or clean_data.get("Lead", ""),
             "Stage": clean_data.get("Stage") or clean_data.get("Lead Status", ""),
+            "Deadline": clean_data.get("Deadline") or clean_data.get("deadline", "") or clean_data.get("Due Date", "") or clean_data.get("Due", ""),
+            "Follow up date": clean_data.get("Follow up date") or clean_data.get("follow up date", "") or clean_data.get("Follow Up Date", ""),
         }
         for ak, av in alias_map.items():
             if av and not clean_data.get(ak):
                 clean_data[ak] = av
         
         # Auto-add any new non-empty columns (e.g. Tender Detail fields) to sheet headers (skip synthetic aliases)
-        ignore_aliases = {"Source", "Name", "Phone", "Email", "Last Update", "Revenue Estimations", "Retainer cost", "Lead ID", "Stage", "Status", "Company/Brand Name", "Company Name", "Company POC Name", "Company POC Email ID", "Company POC Phone Number", "Cog POC Name", "Date", "POC Name", "Lead Source", "Retainer Cost", "Lead Status", "Lead", "Contact No.", "Email Id"}
+        ignore_aliases = {"Source", "Name", "Phone", "Email", "Last Update", "Revenue Estimations", "Retainer cost", "Lead ID", "Stage", "Status", "Company/Brand Name", "Company Name", "Company POC Name", "Company POC Email ID", "Company POC Phone Number", "Cog POC Name", "Date", "POC Name", "Lead Source", "Retainer Cost", "Lead Status", "Lead", "Contact No.", "Email Id", "Deadline", "deadline", "Due Date", "Due", "Follow up date", "Follow Up Date", "follow up date"}
         new_cols = [k for k, v in clean_data.items() if k not in deduped_headers and k not in ignore_aliases and v != ""]
         if new_cols:
             try:

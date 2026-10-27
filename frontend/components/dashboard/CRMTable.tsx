@@ -1007,6 +1007,8 @@ function LeadDetailsModal({
   const cogPocEmail = lead["POC email"] || lead["Cog POC Email"] || "";
   const remarks = lead["Remarks /Updates"] || lead["Last Update"] || "—";
   const messageFromProspect = lead["Message from Prospect"] || "";
+  const followUpDateVal = lead["Follow up date"] || lead["Follow-up Date"] || lead["follow up date"] || "";
+  const deadlineDateVal = lead["Deadline"] || lead["deadline"] || lead["Due Date"] || lead["Due"] || "";
   const revenueEst =
     lead["Revenue Estimation (In INR) (Oct 26 - Mar 27)"] ||
     lead["Revenue Estimations"] ||
@@ -1077,6 +1079,17 @@ function LeadDetailsModal({
   if (messageFromProspect) {
     coreKeys.add("Message from Prospect");
   }
+  coreKeys.add("Deadline");
+  coreKeys.add("deadline");
+  coreKeys.add("Due Date");
+  coreKeys.add("Due");
+  coreKeys.add("Follow up date");
+  coreKeys.add("Follow Up Date");
+  coreKeys.add("Follow-up Date");
+  coreKeys.add("Follow-up 1");
+  coreKeys.add("Follow-up 2");
+  coreKeys.add("Intro Call");
+  coreKeys.add("Linkedin Ad Link");
 
   const extraFields = Object.entries(lead).filter(([k, v]) => {
     if (k.startsWith("_")) return false;
@@ -1174,6 +1187,38 @@ function LeadDetailsModal({
               )}
             </div>
           </div>
+
+          {/* Key Dates: Follow-up & Deadline */}
+          {(followUpDateVal || deadlineDateVal) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200/50 dark:border-purple-800/30">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                  <CalendarIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-purple-700 dark:text-purple-300 font-semibold block">
+                    Follow-up Date
+                  </span>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                    {followUpDateVal ? formatDisplayDate(followUpDateVal) : "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 shrink-0">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-red-700 dark:text-red-400 font-semibold block">
+                    Deadline Date
+                  </span>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                    {deadlineDateVal ? formatDisplayDate(deadlineDateVal) : "—"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Contact Information */}
           <div>
