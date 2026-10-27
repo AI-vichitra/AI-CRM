@@ -239,8 +239,14 @@ export default function FollowUpDashboardView({
       const diffTime = compareDate.getTime() - today.getTime();
       const daysDiff = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-      const stageVal = String(row[stageCol] || "").toLowerCase();
-      const isWonOrLost = ["won", "closed won", "lost", "closed lost", "dead"].some(x => stageVal.includes(x));
+      const stageVal = String(row[stageCol] || "").toLowerCase().trim();
+      const statusVal = String(row[statusCol] || "").toLowerCase().trim();
+      const isClosed = ["won", "closed won", "lost", "closed lost", "dead", "dropped", "not qualified", "spam", "rejected"].some(
+        x => stageVal.includes(x) || statusVal.includes(x)
+      );
+
+      // Exclude closed/won/lost/dropped deals from the active follow-up dashboard & calendar
+      if (isClosed) return;
 
       let isToday = false;
       let isOverdue = false;
@@ -249,10 +255,7 @@ export default function FollowUpDashboardView({
       if (daysDiff === 0) {
         isToday = true;
       } else if (daysDiff < 0) {
-        // Only flag as overdue if not already Won/Lost
-        if (!isWonOrLost) {
-          isOverdue = true;
-        }
+        isOverdue = true;
       } else {
         isUpcoming = true;
       }
@@ -284,7 +287,7 @@ export default function FollowUpDashboardView({
     });
 
     return leads;
-  }, [sheetData, followUpCol, deadlineCol, stageCol, introCallCol, today]);
+  }, [sheetData, followUpCol, stageCol, statusCol, introCallCol, today]);
 
   // Unique POC list
   const uniquePOCs = useMemo(() => {

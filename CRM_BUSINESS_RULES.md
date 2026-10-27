@@ -74,9 +74,9 @@ The tool scans the row for the first populated follow-up date from:
 
 | Tab | Criteria | Business Meaning |
 | :--- | :--- | :--- |
-| **All** | Any lead with a recognized follow-up or deadline date. | Full schedule overview sorted latest date first. |
+| **All** | Any open lead (not Won, Lost, or Dropped) with a recognized follow-up date. | Full active schedule overview sorted latest date first. |
 | **Due Today** | Difference between scheduled date and today is exactly `0 days`. | Tasks and calls scheduled for today. |
-| **Overdue** | Scheduled date is in the past (`daysDiff < 0`) **AND** lead is not Won/Lost. | Missed follow-ups requiring immediate attention. |
+| **Overdue** | Scheduled date is in the past (`daysDiff < 0`). | Missed follow-ups requiring immediate attention. |
 | **Upcoming** | Scheduled date is in the future (`daysDiff > 0`). | Pipeline actions scheduled for future dates. |
 
 ### Interaction Type Rules
