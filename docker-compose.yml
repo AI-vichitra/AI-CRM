@@ -9,6 +9,9 @@ services:
     environment:
       - RUN_BACKGROUND_SCHEDULER=true
       - GOOGLE_REDIRECT_URI=https://crm.cogculture.agency/api/sheets/callback
+      - DATA_DIR=/app/data
+    volumes:
+      - backend_data:/app/data
     restart: always
 
   frontend:
@@ -35,3 +38,6 @@ services:
       - frontend
       - backend
     restart: always
+
+volumes:
+  backend_data:

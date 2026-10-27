@@ -14,9 +14,22 @@ os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 router = APIRouter()
 
 def _get_token_path():
-    # Store token.json in the backend root directory
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base_dir, "token.json")
+    data_dir = os.environ.get("DATA_DIR", base_dir)
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except Exception:
+        pass
+    target = os.path.join(data_dir, "token.json")
+    if data_dir != base_dir and not os.path.exists(target):
+        src = os.path.join(base_dir, "token.json")
+        if os.path.exists(src):
+            try:
+                import shutil
+                shutil.copy2(src, target)
+            except Exception:
+                pass
+    return target
 
 @router.get("/data")
 def get_sheet_data(bypass_cache: bool = False, sheet_range: Optional[str] = None):

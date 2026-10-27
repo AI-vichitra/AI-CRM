@@ -33,7 +33,21 @@ def _extract_gid(url: str) -> str:
 
 def _get_token_path():
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base_dir, "token.json")
+    data_dir = os.environ.get("DATA_DIR", base_dir)
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except Exception:
+        pass
+    target = os.path.join(data_dir, "token.json")
+    if data_dir != base_dir and not os.path.exists(target):
+        src = os.path.join(base_dir, "token.json")
+        if os.path.exists(src):
+            try:
+                import shutil
+                shutil.copy2(src, target)
+            except Exception:
+                pass
+    return target
 
 def _get_service():
     token_path = _get_token_path()
@@ -509,7 +523,21 @@ import json as _json_mod
 
 def _get_overrides_path() -> str:
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base_dir, "local_overrides.json")
+    data_dir = os.environ.get("DATA_DIR", base_dir)
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except Exception:
+        pass
+    target = os.path.join(data_dir, "local_overrides.json")
+    if data_dir != base_dir and not os.path.exists(target):
+        src = os.path.join(base_dir, "local_overrides.json")
+        if os.path.exists(src):
+            try:
+                import shutil
+                shutil.copy2(src, target)
+            except Exception:
+                pass
+    return target
 
 def _load_overrides() -> dict:
     p = _get_overrides_path()

@@ -4,7 +4,24 @@ import httpx
 from datetime import datetime
 
 # Local SQLite DB fallback path
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "alerts.db")
+base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.environ.get("DATA_DIR", base_dir)
+try:
+    os.makedirs(DATA_DIR, exist_ok=True)
+except Exception:
+    pass
+
+DB_PATH = os.path.join(DATA_DIR, "alerts.db")
+
+# Seed existing database to DATA_DIR if migrating to persistent volume
+if DATA_DIR != base_dir and not os.path.exists(DB_PATH):
+    old_db = os.path.join(base_dir, "alerts.db")
+    if os.path.exists(old_db):
+        try:
+            import shutil
+            shutil.copy2(old_db, DB_PATH)
+        except Exception:
+            pass
 
 # Supabase Credentials from Environment Variables
 SUPABASE_URL = os.environ.get("SUPABASE_URL")

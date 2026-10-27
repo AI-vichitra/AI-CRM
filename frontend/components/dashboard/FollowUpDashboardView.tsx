@@ -205,17 +205,14 @@ export default function FollowUpDashboardView({
     return d;
   }, []);
 
-  // Helper to extract follow-up / scheduled date across any column alias
+  // Helper to extract actual follow-up / scheduled date across follow-up column aliases (excluding proposal deadlines)
   const getFollowUpVal = (row: Record<string, any>): string => {
     if (row[followUpCol] && String(row[followUpCol]).trim() !== "" && String(row[followUpCol]).trim() !== "—") {
       return String(row[followUpCol]).trim();
     }
-    if (row[deadlineCol] && String(row[deadlineCol]).trim() !== "" && String(row[deadlineCol]).trim() !== "—") {
-      return String(row[deadlineCol]).trim();
-    }
     for (const [k, v] of Object.entries(row)) {
       const kl = k.toLowerCase().replace(/[\s_-]+/g, "");
-      if ((kl.includes("followup") || kl.includes("follow") || kl.includes("deadline")) && kl.includes("date")) {
+      if ((kl.includes("followup") || kl.includes("follow")) && kl.includes("date") && !kl.includes("deadline") && !kl.includes("due")) {
         const val = String(v || "").trim();
         if (val && val !== "—") return val;
       }
@@ -223,7 +220,7 @@ export default function FollowUpDashboardView({
     return "";
   };
 
-  // Process and classify all leads with follow-up or deadline dates
+  // Process and classify all leads with follow-up dates
   const processedLeads = useMemo<ProcessedLead[]>(() => {
     if (!sheetData?.rows) return [];
 
@@ -490,9 +487,6 @@ export default function FollowUpDashboardView({
     setUpdatingId(rowNum);
     try {
       const updated: Record<string, any> = { ...lead, [followUpCol]: "" };
-      if (lead[deadlineCol] && !lead[followUpCol]) {
-        updated[deadlineCol] = "";
-      }
       await onSaveLead(updated);
       toast.success(`Follow-up cleared for ${company}`);
     } catch (err: any) {
@@ -1111,7 +1105,7 @@ export default function FollowUpDashboardView({
                   const email = String(lead[emailCol] || "");
                   const poc = String(lead[pocCol] || "Unassigned");
                   const stage = String(lead[stageCol] || "");
-                  const dateStr = lead[followUpCol] || lead[deadlineCol] || "";
+                  const dateStr = getFollowUpVal(lead);
                   const displayDate = formatDisplayDate(lead._parsedDate || dateStr);
                   const daysDiff = lead._daysDiff;
                   const noteText = getCombinedNotes(lead);

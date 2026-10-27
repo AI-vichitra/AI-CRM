@@ -63,13 +63,12 @@ A lead is evaluated for stale aging if **all** of the following conditions are m
 
 ## 4. Master Follow-Up Dashboard Rules
 
-The Follow-Ups view tracks scheduled check-ins, calls, and deadlines across all active accounts.
+The Follow-Ups view tracks scheduled check-ins, calls, and client touchpoints across all active accounts. (Note: Project/RFP `Deadline` dates are tracked separately as deal milestones and are excluded from the follow-up dashboard).
 
 ### Date Detection Priority
-The tool scans the row for the first populated date from:
+The tool scans the row for the first populated follow-up date from:
 1. `Follow up date`
-2. `Deadline`
-3. Any column containing `follow` or `deadline` alongside `date`
+2. Any column containing `follow` or `followup` alongside `date` (excluding `deadline` or `due`)
 
 ### Follow-Up Filter Tabs
 
