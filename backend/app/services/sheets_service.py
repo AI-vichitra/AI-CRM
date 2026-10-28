@@ -663,6 +663,58 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
             headers[0] = "Date"
         deduped_headers = _deduplicate_headers(headers)
         
+        # Explicitly synchronize core alias pairs to prevent stale values from overwriting updates
+        if "Stage" in clean_data and clean_data["Stage"]:
+            clean_data["Lead Status"] = clean_data["Stage"]
+        elif "Lead Status" in clean_data and clean_data["Lead Status"]:
+            clean_data["Stage"] = clean_data["Lead Status"]
+
+        if "Status" in clean_data and clean_data["Status"]:
+            clean_data["Lead"] = clean_data["Status"]
+        elif "Lead" in clean_data and clean_data["Lead"]:
+            clean_data["Status"] = clean_data["Lead"]
+
+        if "Lead Source" in clean_data and clean_data["Lead Source"]:
+            clean_data["Source"] = clean_data["Lead Source"]
+        elif "Source" in clean_data and clean_data["Source"]:
+            clean_data["Lead Source"] = clean_data["Source"]
+
+        if "POC Name" in clean_data and clean_data["POC Name"]:
+            clean_data["Name"] = clean_data["POC Name"]
+        elif "Name" in clean_data and clean_data["Name"]:
+            clean_data["POC Name"] = clean_data["Name"]
+
+        if "Contact No." in clean_data and clean_data["Contact No."]:
+            clean_data["Phone"] = clean_data["Contact No."]
+        elif "Phone" in clean_data and clean_data["Phone"]:
+            clean_data["Contact No."] = clean_data["Phone"]
+
+        if "Email Id" in clean_data and clean_data["Email Id"]:
+            clean_data["Email"] = clean_data["Email Id"]
+        elif "Email" in clean_data and clean_data["Email"]:
+            clean_data["Email Id"] = clean_data["Email"]
+
+        if "Remarks /Updates" in clean_data and clean_data["Remarks /Updates"]:
+            clean_data["Last Update"] = clean_data["Remarks /Updates"]
+        elif "Last Update" in clean_data and clean_data["Last Update"]:
+            clean_data["Remarks /Updates"] = clean_data["Last Update"]
+
+        if "Revenue Estimation (In INR) (Oct 26 - Mar 27)" in clean_data and clean_data["Revenue Estimation (In INR) (Oct 26 - Mar 27)"]:
+            clean_data["Revenue Estimations"] = clean_data["Revenue Estimation (In INR) (Oct 26 - Mar 27)"]
+        elif "Revenue Estimations" in clean_data and clean_data["Revenue Estimations"]:
+            clean_data["Revenue Estimation (In INR) (Oct 26 - Mar 27)"] = clean_data["Revenue Estimations"]
+
+        if "Retainer Cost" in clean_data and clean_data["Retainer Cost"]:
+            clean_data["Retainer cost"] = clean_data["Retainer Cost"]
+        elif "Retainer cost" in clean_data and clean_data["Retainer cost"]:
+            clean_data["Retainer Cost"] = clean_data["Retainer cost"]
+
+        if "Follow up date" in clean_data and clean_data["Follow up date"]:
+            clean_data["Follow Up Date"] = clean_data["Follow up date"]
+            clean_data["Follow Up Date (Latest )"] = clean_data["Follow up date"]
+        elif "Follow Up Date (Latest )" in clean_data and clean_data["Follow Up Date (Latest )"]:
+            clean_data["Follow up date"] = clean_data["Follow Up Date (Latest )"]
+
         # 2b. Field alias mapping
         alias_map = {
             "Date": clean_data.get("Date") or clean_data.get("date", ""),
@@ -800,6 +852,58 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
         if len(headers) > 1 and headers[0] == "" and headers[1].lower() == "company":
             headers[0] = "Date"
         deduped_headers = _deduplicate_headers(headers)
+
+        # Explicitly synchronize core alias pairs to prevent stale values from overwriting updates
+        if "Stage" in clean_data and clean_data["Stage"]:
+            clean_data["Lead Status"] = clean_data["Stage"]
+        elif "Lead Status" in clean_data and clean_data["Lead Status"]:
+            clean_data["Stage"] = clean_data["Lead Status"]
+
+        if "Status" in clean_data and clean_data["Status"]:
+            clean_data["Lead"] = clean_data["Status"]
+        elif "Lead" in clean_data and clean_data["Lead"]:
+            clean_data["Status"] = clean_data["Lead"]
+
+        if "Lead Source" in clean_data and clean_data["Lead Source"]:
+            clean_data["Source"] = clean_data["Lead Source"]
+        elif "Source" in clean_data and clean_data["Source"]:
+            clean_data["Lead Source"] = clean_data["Source"]
+
+        if "POC Name" in clean_data and clean_data["POC Name"]:
+            clean_data["Name"] = clean_data["POC Name"]
+        elif "Name" in clean_data and clean_data["Name"]:
+            clean_data["POC Name"] = clean_data["Name"]
+
+        if "Contact No." in clean_data and clean_data["Contact No."]:
+            clean_data["Phone"] = clean_data["Contact No."]
+        elif "Phone" in clean_data and clean_data["Phone"]:
+            clean_data["Contact No."] = clean_data["Phone"]
+
+        if "Email Id" in clean_data and clean_data["Email Id"]:
+            clean_data["Email"] = clean_data["Email Id"]
+        elif "Email" in clean_data and clean_data["Email"]:
+            clean_data["Email Id"] = clean_data["Email"]
+
+        if "Remarks /Updates" in clean_data and clean_data["Remarks /Updates"]:
+            clean_data["Last Update"] = clean_data["Remarks /Updates"]
+        elif "Last Update" in clean_data and clean_data["Last Update"]:
+            clean_data["Remarks /Updates"] = clean_data["Last Update"]
+
+        if "Revenue Estimation (In INR) (Oct 26 - Mar 27)" in clean_data and clean_data["Revenue Estimation (In INR) (Oct 26 - Mar 27)"]:
+            clean_data["Revenue Estimations"] = clean_data["Revenue Estimation (In INR) (Oct 26 - Mar 27)"]
+        elif "Revenue Estimations" in clean_data and clean_data["Revenue Estimations"]:
+            clean_data["Revenue Estimation (In INR) (Oct 26 - Mar 27)"] = clean_data["Revenue Estimations"]
+
+        if "Retainer Cost" in clean_data and clean_data["Retainer Cost"]:
+            clean_data["Retainer cost"] = clean_data["Retainer Cost"]
+        elif "Retainer cost" in clean_data and clean_data["Retainer cost"]:
+            clean_data["Retainer Cost"] = clean_data["Retainer cost"]
+
+        if "Follow up date" in clean_data and clean_data["Follow up date"]:
+            clean_data["Follow Up Date"] = clean_data["Follow up date"]
+            clean_data["Follow Up Date (Latest )"] = clean_data["Follow up date"]
+        elif "Follow Up Date (Latest )" in clean_data and clean_data["Follow Up Date (Latest )"]:
+            clean_data["Follow up date"] = clean_data["Follow Up Date (Latest )"]
 
         # Field alias mapping
         alias_map = {

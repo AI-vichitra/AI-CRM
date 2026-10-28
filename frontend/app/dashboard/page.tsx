@@ -313,12 +313,23 @@ function DashboardContent() {
         return;
       }
       const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (row._sheet_tab || "Active Leads");
-      const updatedRow = { ...row, Stage: newStage };
+      const updatedRow = { ...row, Stage: newStage, "Lead Status": newStage };
+
+      // Optimistic update in local state for instantaneous feedback
+      setSheetData((prev) => {
+        if (!prev) return prev;
+        const newRows = prev.rows.map((r) =>
+          r._row_num === rowNum ? { ...r, Stage: newStage, "Lead Status": newStage } : r
+        );
+        return { ...prev, rows: newRows };
+      });
+
       await api.updateLead(rowNum, updatedRow, targetTabRange);
       toast.success(`Proposal stage moved to "${newStage}"`);
       await loadData(false, true);
     } catch (err: any) {
       toast.error(err.message || "Failed to update proposal stage");
+      await loadData(false, true);
     } finally {
       setRefreshing(false);
     }
@@ -331,12 +342,33 @@ function DashboardContent() {
         toast.error("Invalid lead row index");
         return;
       }
-      const updatedRow = { ...row, [col]: newValue };
-      await api.updateLead(rowNum, updatedRow);
+      const updatedRow: Record<string, any> = { ...row, [col]: newValue };
+      if (col === "Stage") {
+        updatedRow["Lead Status"] = newValue;
+      } else if (col === "Lead Status") {
+        updatedRow["Stage"] = newValue;
+      } else if (col === "Status") {
+        updatedRow["Lead"] = newValue;
+      } else if (col === "Lead") {
+        updatedRow["Status"] = newValue;
+      }
+      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (row._sheet_tab || "Active Leads");
+
+      // Optimistic update in local state
+      setSheetData((prev) => {
+        if (!prev) return prev;
+        const newRows = prev.rows.map((r) =>
+          r._row_num === rowNum ? { ...r, ...updatedRow } : r
+        );
+        return { ...prev, rows: newRows };
+      });
+
+      await api.updateLead(rowNum, updatedRow, targetTabRange);
       toast.success(`${col} updated to "${newValue || "None"}"`);
       await loadData(false, true);
     } catch (err: any) {
       toast.error(err.message || `Failed to update ${col}`);
+      await loadData(false, true);
       throw err;
     }
   };
