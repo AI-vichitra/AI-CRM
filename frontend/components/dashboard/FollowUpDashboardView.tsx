@@ -58,6 +58,13 @@ export const parseFollowUpDate = (dateVal: any): Date | null => {
   const str = String(dateVal).trim();
   if (!str || str === "—" || str.toLowerCase() === "placeholder") return null;
 
+  // Handle Excel/Sheets serial numbers (e.g. 46216)
+  const numVal = Number(str);
+  if (!isNaN(numVal) && numVal >= 30000 && numVal <= 65000) {
+    const utcDate = new Date((numVal - 25569) * 86400 * 1000);
+    return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+  }
+
   // Isolate the date part (before whitespace or ISO T separator)
   const datePart = str.split(/[T\s]/)[0];
   const parts = datePart.split(/[-/.]/);

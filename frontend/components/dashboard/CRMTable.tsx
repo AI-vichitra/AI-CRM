@@ -87,6 +87,13 @@ const parseDate = (dateVal: any): Date | null => {
   const dateStr = String(dateVal).trim();
   if (!dateStr || dateStr === "—" || dateStr.toLowerCase() === "placeholder") return null;
 
+  // Handle Excel/Sheets serial numbers (e.g. 46216)
+  const numVal = Number(dateStr);
+  if (!isNaN(numVal) && numVal >= 30000 && numVal <= 65000) {
+    const utcDate = new Date((numVal - 25569) * 86400 * 1000);
+    return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+  }
+
   const datePart = dateStr.split(/\s+/)[0];
   const parts = datePart.split(/[-/.]/);
   if (parts.length === 3) {

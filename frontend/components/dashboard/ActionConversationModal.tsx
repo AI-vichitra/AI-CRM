@@ -101,6 +101,17 @@ const formatDateForInput = (val: any): string => {
   if (!val) return "";
   const str = String(val).trim();
   if (!str || str === "—" || str.toLowerCase() === "placeholder") return "";
+
+  // Handle Excel/Sheets serial numbers (e.g. 46216)
+  const numVal = Number(str);
+  if (!isNaN(numVal) && numVal >= 30000 && numVal <= 65000) {
+    const utcDate = new Date((numVal - 25569) * 86400 * 1000);
+    const y = utcDate.getUTCFullYear();
+    const m = String(utcDate.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(utcDate.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
   const parts = str.split(/[T\s]/)[0].split(/[-/.]/);
   if (parts.length === 3) {
     const p0 = parseInt(parts[0], 10);
@@ -137,6 +148,14 @@ const formatDateForInput = (val: any): string => {
 const parseDateSafe = (val: any): Date => {
   if (!val) return new Date();
   const str = String(val).trim();
+
+  // Handle Excel/Sheets serial numbers (e.g. 46216)
+  const numVal = Number(str);
+  if (!isNaN(numVal) && numVal >= 30000 && numVal <= 65000) {
+    const utcDate = new Date((numVal - 25569) * 86400 * 1000);
+    return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+  }
+
   const parts = str.split(/[-/.]/);
   if (parts.length === 3) {
     const p0 = parseInt(parts[0], 10);
@@ -145,6 +164,10 @@ const parseDateSafe = (val: any): Date => {
     if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
       if (parts[0].length === 4) return new Date(p0, p1 - 1, p2);
       if (parts[2].length === 4) return new Date(p2, p1 - 1, p0);
+      if (parts[2].length === 2) {
+        const fullYear = p2 < 50 ? 2000 + p2 : 1900 + p2;
+        return new Date(fullYear, p1 - 1, p0);
+      }
     }
   }
   const parsed = Date.parse(str);

@@ -1,5 +1,6 @@
 import re
 import os
+import datetime
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 from google.oauth2.credentials import Credentials as OAuthCredentials
@@ -8,6 +9,16 @@ from cachetools import TTLCache
 from app.config import settings
 
 _cache = TTLCache(maxsize=10, ttl=settings.cache_ttl_seconds)
+
+def _convert_excel_serial_date(val: str) -> str:
+    """Converts Excel/Google Sheets serial date integer (e.g. 46216) to DD-MM-YY string."""
+    if not val:
+        return ""
+    s = str(val).strip()
+    if s.isdigit() and 30000 <= int(s) <= 65000:
+        d = datetime.date(1899, 12, 30) + datetime.timedelta(days=int(s))
+        return d.strftime("%d-%m-%y")
+    return s
 
 MOCK_HEADERS = ["No.", "Campaign", "Visitors", "Contacts", "Companies", "Leads", "Value"]
 MOCK_ROWS = [
@@ -153,6 +164,9 @@ def _fetch_public_csv(sheet_url: str) -> dict:
         row_has_data = False
         for i in range(len(headers)):
             val = row[i].strip() if i < len(row) else ""
+            hl = headers[i].lower().strip()
+            if "date" in hl or "deadline" in hl or "due" in hl or "follow up" in hl or "follow-up" in hl:
+                val = _convert_excel_serial_date(val)
             row_dict[headers[i]] = val
             if val != "":
                 row_has_data = True
@@ -278,7 +292,7 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
             result = (
                 service.spreadsheets()
                 .values()
-                .get(spreadsheetId=sheet_id, range=final_range)
+                .get(spreadsheetId=sheet_id, range=final_range, valueRenderOption="FORMATTED_VALUE")
                 .execute()
             )
         except Exception as range_err:
@@ -286,7 +300,7 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
             result = (
                 service.spreadsheets()
                 .values()
-                .get(spreadsheetId=sheet_id, range=first_sheet_title)
+                .get(spreadsheetId=sheet_id, range=first_sheet_title, valueRenderOption="FORMATTED_VALUE")
                 .execute()
             )
 
@@ -310,7 +324,10 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                 row_has_data = False
                 
                 for col_idx, col_header in enumerate(deduped_raw_headers):
-                    val = row[col_idx].strip() if col_idx < len(row) else ""
+                    val = str(row[col_idx]).strip() if col_idx < len(row) else ""
+                    hl = col_header.lower().strip()
+                    if "date" in hl or "deadline" in hl or "due" in hl or "follow up" in hl or "follow-up" in hl:
+                        val = _convert_excel_serial_date(val)
                     row_dict[col_header] = val
                     if val != "":
                         row_has_data = True
@@ -391,7 +408,7 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                     sept_res = (
                         service.spreadsheets()
                         .values()
-                        .get(spreadsheetId=sheet_id, range=sept_tab_title)
+                        .get(spreadsheetId=sheet_id, range=sept_tab_title, valueRenderOption="FORMATTED_VALUE")
                         .execute()
                     )
                     sept_vals = sept_res.get("values", [])
@@ -401,7 +418,11 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                         for s_idx, s_row in enumerate(sept_vals[1:]):
                             s_dict = {}
                             for c_idx, sh in enumerate(sept_raw_headers):
-                                s_dict[sh] = s_row[c_idx].strip() if c_idx < len(s_row) else ""
+                                val = str(s_row[c_idx]).strip() if c_idx < len(s_row) else ""
+                                hl = sh.lower().strip()
+                                if "date" in hl or "deadline" in hl or "due" in hl or "follow up" in hl or "follow-up" in hl:
+                                    val = _convert_excel_serial_date(val)
+                                s_dict[sh] = val
                             non_empty = [k for k, v in s_dict.items() if v != "" and k != "S. No."]
                             if len(non_empty) < 1:
                                 continue
