@@ -285,7 +285,11 @@ export default function LeadFormModal({
       setPocPhone("");
       setCogPoc(defaultCogPoc || "");
       setSource("");
-      setSelectedRequirements([]);
+      if (currentTab === "pr_leads") {
+        setSelectedRequirements(["PR"]);
+      } else {
+        setSelectedRequirements([]);
+      }
       setHasOtherReq(false);
       setCustomRequirement("");
       setIsReqDropdownOpen(false);

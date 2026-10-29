@@ -379,6 +379,10 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                     date_val = row_dict.get("Date") or row_dict.get("Date (1)") or row_dict.get("Unnamed") or ""
                     row_dict["Date"] = date_val
 
+                    # If fetching PR Leads, strictly mask Requirement to 'PR'
+                    if final_range.strip().lower() == "pr leads":
+                        row_dict["Requirement"] = "PR"
+
                     normalized.append(row_dict)
 
             # 4. If fetching Active Leads, also seamlessly integrate 'Active Leads from Sept '
@@ -618,6 +622,111 @@ def _apply_local_overrides(data: dict) -> dict:
         "is_mock": data.get("is_mock", False)
     }
 
+def _sync_lead_append(service, sheet_id: str, target_tab: str, clean_data: dict):
+    """Appends a lead row to target_tab for dual-entry sync (Active Leads <-> PR Leads)."""
+    try:
+        result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=f"'{target_tab}'!A1:ZZ1").execute()
+        vals = result.get("values", [])
+        if not vals:
+            return
+        headers = [h.strip() for h in vals[0]]
+        if len(headers) > 1 and headers[0] == "" and headers[1].lower() == "company":
+            headers[0] = "Date"
+        deduped = _deduplicate_headers(headers)
+
+        row_vals = []
+        for dh in deduped:
+            val = str(clean_data.get(dh, "")).strip()
+            if (dh == "" or dh.startswith("Unnamed")) and clean_data.get("Date"):
+                val = str(clean_data.get("Date")).strip()
+            row_vals.append(val)
+
+        existing_res = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=f"'{target_tab}'!A:B"
+        ).execute()
+        existing_rows = existing_res.get("values", [])
+        next_row = max(len(existing_rows) + 1, 2)
+        last_col = _get_column_letter(len(row_vals))
+
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=f"'{target_tab}'!A{next_row}:{last_col}{next_row}",
+            valueInputOption="USER_ENTERED",
+            body={"values": [row_vals]}
+        ).execute()
+    except Exception as err:
+        print(f"Warning: Failed to sync append to '{target_tab}': {err}")
+
+def _sync_lead_update(service, sheet_id: str, source_tab: str, target_tab: str, clean_data: dict):
+    """Syncs updated lead fields between Active Leads and PR Leads based on matching Company name."""
+    try:
+        comp_name = (clean_data.get("Company") or clean_data.get("Company Name") or "").strip().lower()
+        if not comp_name:
+            return
+
+        target_res = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=f"'{target_tab}'!A:ZZ"
+        ).execute()
+        target_rows = target_res.get("values", [])
+        if len(target_rows) < 2:
+            return
+
+        raw_headers = [h.strip() for h in target_rows[0]]
+        if len(raw_headers) > 1 and raw_headers[0] == "" and raw_headers[1].lower() == "company":
+            raw_headers[0] = "Date"
+        deduped = _deduplicate_headers(raw_headers)
+
+        comp_idx = -1
+        req_idx = -1
+        for idx, h in enumerate(raw_headers):
+            hl = h.lower().strip()
+            if hl in ["company", "company name", "company/brand name"]:
+                comp_idx = idx
+            elif hl == "requirement":
+                req_idx = idx
+
+        if comp_idx == -1:
+            return
+
+        matching_row = -1
+        for r_num, row_vals in enumerate(target_rows[1:], start=2):
+            if len(row_vals) > comp_idx and row_vals[comp_idx].strip().lower() == comp_name:
+                matching_row = r_num
+                break
+
+        if matching_row == -1:
+            return
+
+        sync_payload = dict(clean_data)
+        if target_tab.strip().lower() == "pr leads":
+            sync_payload["Requirement"] = "PR"
+        elif target_tab.strip().lower() == "active leads":
+            # Preserve existing rich requirement in Active Leads if not explicitly changed
+            existing_row_vals = target_rows[matching_row - 1]
+            if req_idx != -1 and len(existing_row_vals) > req_idx:
+                existing_req = existing_row_vals[req_idx].strip()
+                if existing_req:
+                    sync_payload["Requirement"] = existing_req
+
+        row_vals = []
+        for dh in deduped:
+            val = str(sync_payload.get(dh, "")).strip()
+            if (dh == "" or dh.startswith("Unnamed")) and sync_payload.get("Date"):
+                val = str(sync_payload.get("Date")).strip()
+            row_vals.append(val)
+
+        last_col = _get_column_letter(len(row_vals))
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=f"'{target_tab}'!A{matching_row}:{last_col}{matching_row}",
+            valueInputOption="USER_ENTERED",
+            body={"values": [row_vals]}
+        ).execute()
+    except Exception as err:
+        print(f"Warning: Failed to sync update to '{target_tab}': {err}")
+
 def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
     """Appends a new lead row to the Google Sheet (with local fallback if sheet is Viewer-only). Clears cache."""
     if not sheet_url or sheet_url.strip() in ["", "mock", "local_db"]:
@@ -790,6 +899,19 @@ def append_lead_row(sheet_url: str, range_name: str, lead_data: dict) -> dict:
             valueInputOption="USER_ENTERED",
             body={"values": [row_values]}
         ).execute()
+
+        # Dual-entry sync between Active Leads and PR Leads
+        req_text = str(clean_data.get("Requirement", "")).strip()
+        is_pr_req = bool(re.search(r'\bPR\b', req_text, re.IGNORECASE))
+        
+        if final_range.strip().lower() == "active leads" and is_pr_req:
+            pr_payload = dict(clean_data)
+            pr_payload["Requirement"] = "PR"
+            _sync_lead_append(service, sheet_id, "PR Leads", pr_payload)
+        elif final_range.strip().lower() == "pr leads":
+            active_payload = dict(clean_data)
+            active_payload["Requirement"] = "PR"
+            _sync_lead_append(service, sheet_id, "Active Leads", active_payload)
         
         _cache.clear()
         return {"ok": True, "row_num": next_row_num}
@@ -968,6 +1090,12 @@ def update_lead_row(sheet_url: str, range_name: str, row_num: int, lead_data: di
             valueInputOption="USER_ENTERED",
             body=body
         ).execute()
+
+        # Sync updates between Active Leads and PR Leads
+        if final_range.strip().lower() == "active leads":
+            _sync_lead_update(service, sheet_id, "Active Leads", "PR Leads", clean_data)
+        elif final_range.strip().lower() == "pr leads":
+            _sync_lead_update(service, sheet_id, "PR Leads", "Active Leads", clean_data)
         
         _cache.clear()
         return {"ok": True}

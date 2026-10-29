@@ -14,7 +14,8 @@ import {
   LogOut,
   FileText,
   Send,
-  Calendar
+  Calendar,
+  Megaphone
 } from "lucide-react";
 import { ThemeToggle } from "../ThemeToggle";
 import { api } from "../../lib/api";
@@ -71,6 +72,7 @@ export default function DashboardShell({ children }: DashboardShellProps) {
 
   const navigation = [
     { name: "Active Leads", href: "/dashboard?tab=active_leads", icon: LayoutDashboard, key: "active_leads" },
+    { name: "PR Leads", href: "/dashboard?tab=pr_leads", icon: Megaphone, key: "pr_leads" },
     { name: "Follow-Ups", href: "/dashboard?tab=followups", icon: Calendar, key: "followups" },
     { name: "Proposal Tracker", href: "/dashboard?tab=proposals", icon: Send, key: "proposals" },
     { name: "Internal Leads", href: "/dashboard?tab=internal_leads", icon: FileText, key: "internal_leads" },

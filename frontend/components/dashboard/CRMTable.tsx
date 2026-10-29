@@ -332,11 +332,12 @@ export default function CRMTable({
     ? ["Date", ...cleanedCols.filter((col) => col !== "Date")]
     : cleanedCols;
   
-  // Check if we are on Active Leads tab (default tab in dashboard) or Internal Leads tab
+  // Check if we are on Active Leads tab (default tab in dashboard), Internal Leads tab, or PR Leads tab
   const isActiveLeadsTab = !isTenderDashboard && (currentTab === "active_leads" || currentTab === "dashboard" || !currentTab);
   const isInternalLeadsTab = currentTab === "internal_leads";
+  const isPrLeadsTab = currentTab === "pr_leads";
 
-  if (isActiveLeadsTab || isInternalLeadsTab) {
+  if (isActiveLeadsTab || isInternalLeadsTab || isPrLeadsTab) {
     // Strictly display ONLY the requested columns in this exact order with Date first:
     // Date, Company Name, Requirement, Source, Stage, Status, Cog POC
     activeCols = ["Date", "Company", "Requirement", "Source", "Stage", "Status", "Cog POC"];
@@ -687,6 +688,13 @@ export default function CRMTable({
                     
                     // Render formatted cells
                     const renderCellContent = () => {
+                      if (isPrLeadsTab && col.toLowerCase().trim() === "requirement") {
+                        return (
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            PR
+                          </span>
+                        );
+                      }
                       if (col.toLowerCase().includes("company")) {
                         return (
                           <div className="flex items-center gap-2">
@@ -978,6 +986,7 @@ export default function CRMTable({
           onClose={() => setSelectedDetailsRow(null)}
           onOpenAction={onOpenAction}
           currentUser={currentUser}
+          currentTab={currentTab}
         />
       )}
     </div>
@@ -989,11 +998,13 @@ function LeadDetailsModal({
   onClose,
   onOpenAction,
   currentUser,
+  currentTab,
 }: {
   lead: Record<string, any>;
   onClose: () => void;
   onOpenAction?: (row: Record<string, any>) => void;
   currentUser?: { name?: string; email?: string } | null;
+  currentTab?: string;
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
@@ -1007,7 +1018,7 @@ function LeadDetailsModal({
   const pocName = lead["POC Name"] || lead["Name"] || "—";
   const contactNo = lead["Contact No."] || lead["Phone"] || "—";
   const emailVal = lead["Email Id"] || lead["Email"] || "—";
-  const requirement = getRowVal(lead, "Requirement") || "—";
+  const requirement = currentTab === "pr_leads" ? "PR" : (getRowVal(lead, "Requirement") || "—");
   const stageVal = getRowVal(lead, "Stage") || "—";
   const cogPoc = getRowVal(lead, "Cog POC") || "—";
   const cogPocEmail = lead["POC email"] || lead["Cog POC Email"] || "";

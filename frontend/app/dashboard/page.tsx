@@ -123,8 +123,8 @@ function DashboardContent() {
 
   async function loadData(showToast = false, bypassCache = false) {
     try {
-      // Target range based on tab: "Internal Leads" for internal leads, "Active Leads" for Active Leads & Tender
-      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : "Active Leads";
+      // Target range based on tab: "Internal Leads" for internal leads, "PR Leads" for PR leads, "Active Leads" for Active Leads & Tender
+      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (tab === "pr_leads" ? "PR Leads" : "Active Leads");
 
       const [sum, data, authStatus] = await Promise.all([
         api.getDashboardSummary(bypassCache),
@@ -253,7 +253,11 @@ function DashboardContent() {
 
     try {
       setRefreshing(true);
-      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (row._sheet_tab || "Active Leads");
+      const targetTabRange = tab === "internal_leads" 
+        ? "Internal Leads" 
+        : tab === "pr_leads"
+        ? "PR Leads"
+        : (row._sheet_tab || "Active Leads");
       await api.deleteLead(rowNum, targetTabRange);
       toast.success("Lead deleted successfully");
       await loadData(false, true);
@@ -274,6 +278,8 @@ function DashboardContent() {
 
       const targetTabRange = tab === "internal_leads" 
         ? "Internal Leads" 
+        : tab === "pr_leads"
+        ? "PR Leads"
         : ((leadDataInput._sheet_tab || (selectedActionLead && selectedActionLead._sheet_tab) || (selectedLead && selectedLead._sheet_tab)) || "Active Leads");
 
       if (targetRowNum) {
@@ -312,7 +318,11 @@ function DashboardContent() {
         toast.error("Invalid lead row index");
         return;
       }
-      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (row._sheet_tab || "Active Leads");
+      const targetTabRange = tab === "internal_leads" 
+        ? "Internal Leads" 
+        : tab === "pr_leads" 
+        ? "PR Leads" 
+        : (row._sheet_tab || "Active Leads");
       const updatedRow = { ...row, Stage: newStage, "Lead Status": newStage };
 
       // Optimistic update in local state for instantaneous feedback
@@ -352,7 +362,11 @@ function DashboardContent() {
       } else if (col === "Lead") {
         updatedRow["Status"] = newValue;
       }
-      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (row._sheet_tab || "Active Leads");
+      const targetTabRange = tab === "internal_leads" 
+        ? "Internal Leads" 
+        : tab === "pr_leads" 
+        ? "PR Leads" 
+        : (row._sheet_tab || "Active Leads");
 
       // Optimistic update in local state
       setSheetData((prev) => {
@@ -427,6 +441,7 @@ function DashboardContent() {
 
   const isTendersTab = tab === "tenders";
   const isInternalLeadsTab = tab === "internal_leads";
+  const isPrLeadsTab = tab === "pr_leads";
 
   // Filter rows by tab (lead type) and selected month
   const filteredRows = React.useMemo(() => {
@@ -459,8 +474,8 @@ function DashboardContent() {
     if (isTendersTab) {
       // Tender Section: strictly rows where Source is 'Tender'
       rows = rows.filter(row => isRowTender(row));
-    } else if (isInternalLeadsTab) {
-      // Internal Leads Section: fetched directly from Internal Leads primary sheet tab
+    } else if (isInternalLeadsTab || isPrLeadsTab) {
+      // Internal Leads / PR Leads Section: fetched directly from primary sheet tab
       rows = rows;
     } else {
       // Active Leads Section: strictly exclude any row where Source is 'Tender' so they appear in Tender ONLY
@@ -819,6 +834,8 @@ function DashboardContent() {
                   ? "Tender" 
                   : tab === "internal_leads" 
                   ? "Internal Leads" 
+                  : tab === "pr_leads"
+                  ? "PR Leads"
                   : tab === "data" 
                   ? "Data Platform" 
                   : tab === "help"

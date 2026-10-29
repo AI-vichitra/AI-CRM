@@ -5,7 +5,7 @@ DEFAULT_CONFIG = {
     "sheet_url": "",
     "sheet_id": "",
     "sheet_range": "Active Leads",
-    "sheet_tabs": ["Active Leads", "Internal Leads"],
+    "sheet_tabs": ["Active Leads", "PR Leads", "Internal Leads"],
     "visible_columns": [],      # [] = all visible
     "column_order": [],
     "graphs": [],                # [{ id, type, x_col, y_col, title }]
