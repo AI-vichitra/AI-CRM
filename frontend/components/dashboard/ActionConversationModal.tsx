@@ -151,6 +151,19 @@ const parseDateSafe = (val: any): Date => {
   return isNaN(parsed) ? new Date() : new Date(parsed);
 };
 
+// Helper to format date cleanly as DD-MM-YY
+const formatDisplayDate = (val: any): string => {
+  if (!val) return "—";
+  const str = String(val).trim();
+  if (!str || str === "—" || str.toLowerCase() === "placeholder") return "—";
+  const parsed = parseDateSafe(str);
+  if (!parsed || isNaN(parsed.getTime())) return str;
+  const yy = String(parsed.getFullYear()).slice(-2);
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  return `${dd}-${mm}-${yy}`;
+};
+
 export default function ActionConversationModal({
   isOpen,
   onClose,
@@ -513,12 +526,12 @@ export default function ActionConversationModal({
                 <span>POC: {editCogPoc || "Unassigned"} • {editSource || "Direct"}</span>
                 {editFollowUpDate && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-full border border-purple-200/50 dark:border-purple-800/30">
-                    Follow-up: {editFollowUpDate}
+                    Follow-up: {formatDisplayDate(editFollowUpDate)}
                   </span>
                 )}
                 {editDeadline && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-full border border-red-200/50 dark:border-red-800/30">
-                    Deadline: {editDeadline}
+                    Deadline: {formatDisplayDate(editDeadline)}
                   </span>
                 )}
               </div>
@@ -1286,7 +1299,7 @@ export default function ActionConversationModal({
                                     {c.conversation_type}
                                   </span>
                                   <span className="text-[11px] font-mono text-gray-500 bg-gray-50 dark:bg-white/5 px-2 py-0.5 rounded border border-gray-100 dark:border-white/5">
-                                    {c.date}
+                                    {formatDisplayDate(c.date)}
                                   </span>
                                   {c.created_at && (
                                     <span className="text-[11px] text-gray-400 font-mono">

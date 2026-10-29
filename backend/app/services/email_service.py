@@ -385,6 +385,19 @@ def _meta(parts: List[str]) -> str:
     return " &middot; ".join(p for p in parts if p and p.strip())
 
 
+def _source_pill(source: str) -> str:
+    """Format lead source as a clean pill badge for email meta lines."""
+    clean = (source or "").strip()
+    if not clean:
+        return ""
+    return (
+        f'<span style="display:inline-block; font-size:10px; font-weight:700; '
+        f'color:#374151; background:#f3f4f6; border:1px solid #e5e7eb; '
+        f'padding:2px 8px; border-radius:12px; text-transform:uppercase; '
+        f'letter-spacing:0.5px;">{clean}</span>'
+    )
+
+
 def _val_str(r: Dict[str, Any]) -> str:
     v = parse_num(
         r.get("Revenue Estimation (In INR) (Oct 26 - Mar 27)")
@@ -486,11 +499,19 @@ def build_daily_leads_digest_html(
         req   = (r.get("Requirement") or "").strip()
         note  = (r.get("Remarks /Updates") or r.get("Last Update") or "").strip()
         v_str = _val_str(r)
-        meta  = _meta([
+        source = (r.get("Source") or r.get("Lead Source") or r.get("Lead Type") or r.get("source") or "").strip()
+        source_badge = _source_pill(source)
+
+        meta_parts = []
+        if source_badge:
+            meta_parts.append(source_badge)
+        meta_parts.append(
             f'<span style="color:{TEXT_MUTED}; font-weight:500;">{poc}</span>' if poc else
-            f'<span style="color:#d97706; font-weight:500;">No owner</span>',
-            req[:60] + ("…" if len(req) > 60 else "") if req else "",
-        ])
+            f'<span style="color:#d97706; font-weight:500;">No owner</span>'
+        )
+        if req:
+            meta_parts.append(req[:60] + ("…" if len(req) > 60 else ""))
+        meta = _meta(meta_parts)
         hot_cards += render_lead_card(
             index=idx,
             company=comp,
@@ -668,11 +689,19 @@ def build_proposals_followup_alert_html(
             else:
                 badge = render_status_badge("Scheduled", "scheduled")
 
-        meta = _meta([
+        source = (r.get("Source") or r.get("Lead Source") or r.get("Lead Type") or r.get("source") or "").strip()
+        source_badge = _source_pill(source)
+
+        meta_parts = []
+        if source_badge:
+            meta_parts.append(source_badge)
+        meta_parts.append(
             f'<span style="color:{TEXT_MUTED}; font-weight:500;">{poc}</span>' if poc else
-            f'<span style="color:#d97706; font-weight:500;">No owner</span>',
-            req[:60] + ("…" if len(req) > 60 else "") if req else "",
-        ])
+            f'<span style="color:#d97706; font-weight:500;">No owner</span>'
+        )
+        if req:
+            meta_parts.append(req[:60] + ("…" if len(req) > 60 else ""))
+        meta = _meta(meta_parts)
 
         to_send_cards += render_lead_card(
             index=idx,
@@ -711,11 +740,18 @@ def build_proposals_followup_alert_html(
         else:
             badge = render_status_badge(f"{days_ago}d overdue", "warm")
 
-        meta_parts = [
+        source = (r.get("Source") or r.get("Lead Source") or r.get("Lead Type") or r.get("source") or "").strip()
+        source_badge = _source_pill(source)
+
+        meta_parts = []
+        if source_badge:
+            meta_parts.append(source_badge)
+        meta_parts.append(
             f'<span style="color:{TEXT_MUTED}; font-weight:500;">{poc}</span>' if poc else
-            f'<span style="color:#d97706; font-weight:500;">No owner</span>',
-            req[:60] + ("…" if len(req) > 60 else "") if req else "",
-        ]
+            f'<span style="color:#d97706; font-weight:500;">No owner</span>'
+        )
+        if req:
+            meta_parts.append(req[:60] + ("…" if len(req) > 60 else ""))
         if contact_parts:
             meta_parts.append(" / ".join(contact_parts))
         meta = _meta(meta_parts)

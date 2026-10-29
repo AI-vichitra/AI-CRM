@@ -120,7 +120,7 @@ const parseDate = (dateVal: any): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
-// Helper to format date cleanly as YYYY-MM-DD
+// Helper to format date cleanly as DD-MM-YY
 const formatDisplayDate = (dateVal: any): string => {
   if (!dateVal) return "—";
   const dateStr = String(dateVal).trim();
@@ -129,10 +129,10 @@ const formatDisplayDate = (dateVal: any): string => {
   const parsed = parseDate(dateStr);
   if (!parsed) return dateStr;
   
-  const yyyy = parsed.getFullYear();
+  const yy = String(parsed.getFullYear()).slice(-2);
   const mm = String(parsed.getMonth() + 1).padStart(2, '0');
   const dd = String(parsed.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return `${dd}-${mm}-${yy}`;
 };
 
 // Helper to retrieve or generate a unique Lead ID
@@ -178,6 +178,12 @@ const getRowVal = (row: Record<string, any>, colName: string): any => {
     if (row["Stage"] && String(row["Stage"]).trim()) return row["Stage"];
     if (row["Lead Status"] && String(row["Lead Status"]).trim()) return row["Lead Status"];
     if (row["Lead"] && String(row["Lead"]).trim()) return row["Lead"];
+  }
+  if (colName === "Source" || colName === "Lead Source") {
+    if (row["Source"] && String(row["Source"]).trim()) return row["Source"];
+    if (row["Lead Source"] && String(row["Lead Source"]).trim()) return row["Lead Source"];
+    if (row["Lead Type"] && String(row["Lead Type"]).trim()) return row["Lead Type"];
+    if (row["source"] && String(row["source"]).trim()) return row["source"];
   }
   const lower = colName.toLowerCase().trim();
   for (const [k, v] of Object.entries(row)) {
@@ -332,8 +338,8 @@ export default function CRMTable({
 
   if (isActiveLeadsTab || isInternalLeadsTab) {
     // Strictly display ONLY the requested columns in this exact order with Date first:
-    // Date, Company Name, Requirement, Stage, Status, Cog POC
-    activeCols = ["Date", "Company", "Requirement", "Stage", "Status", "Cog POC"];
+    // Date, Company Name, Requirement, Source, Stage, Status, Cog POC
+    activeCols = ["Date", "Company", "Requirement", "Source", "Stage", "Status", "Cog POC"];
   } else if (isTenderDashboard) {
     // For Tender Dashboard, remove specific columns
     activeCols = activeCols.filter(col => {

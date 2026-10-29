@@ -97,6 +97,19 @@ const parseDate = (dateVal: any): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
+// Helper to format date cleanly as DD-MM-YY
+const formatDisplayDate = (dateVal: any): string => {
+  if (!dateVal) return "—";
+  const dateStr = String(dateVal).trim();
+  if (!dateStr || dateStr === "—" || dateStr.toLowerCase() === "placeholder") return "—";
+  const parsed = parseDate(dateStr);
+  if (!parsed) return dateStr;
+  const yy = String(parsed.getFullYear()).slice(-2);
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  return `${dd}-${mm}-${yy}`;
+};
+
 // Calculate proposal aging in days
 const getAgingDays = (dateVal: any): number | null => {
   const d = parseDate(dateVal);
@@ -738,7 +751,7 @@ export default function ProposalTrackerView({
                           ) : "—"}
                         </td>
                         <td className="py-3 px-4 font-mono text-gray-600 dark:text-gray-300">
-                          {dateVal}
+                          {formatDisplayDate(dateVal)}
                         </td>
                         <td className="py-3 px-4">
                           {aging !== null ? (

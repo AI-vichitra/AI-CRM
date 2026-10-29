@@ -39,7 +39,7 @@ const parseDate = (dateVal: any): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
-// Helper to format date cleanly as YYYY-MM-DD
+// Helper to format date cleanly as DD-MM-YY
 const formatDisplayDate = (dateVal: any): string => {
   if (!dateVal) return "—";
   const dateStr = String(dateVal).trim();
@@ -48,10 +48,10 @@ const formatDisplayDate = (dateVal: any): string => {
   const parsed = parseDate(dateStr);
   if (!parsed) return dateStr;
   
-  const yyyy = parsed.getFullYear();
+  const yy = String(parsed.getFullYear()).slice(-2);
   const mm = String(parsed.getMonth() + 1).padStart(2, '0');
   const dd = String(parsed.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return `${dd}-${mm}-${yy}`;
 };
 
 export default function DataPlatformView({ sheetData, onRefresh }: DataPlatformViewProps) {

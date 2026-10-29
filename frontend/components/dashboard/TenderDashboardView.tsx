@@ -88,13 +88,26 @@ const parseDate = (val: any): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
-// Format Date as DD/MM/YYYY
+// Format Date as DD-MM-YY
 const formatDateStr = (d: Date | null): string => {
   if (!d) return "—";
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+};
+
+// Helper to format any date value as DD-MM-YY
+const formatDisplayDate = (val: any): string => {
+  if (!val) return "—";
+  const str = String(val).trim();
+  if (!str || str === "—" || str.toLowerCase() === "placeholder") return "—";
+  const d = parseDate(str);
+  if (!d) return str;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
 };
 
 // Format Date for HTML date inputs (YYYY-MM-DD)
@@ -798,7 +811,7 @@ export default function TenderDashboardView({
 
                       {/* Last Submission Date */}
                       <td className="py-3 px-4 font-mono text-gray-700 dark:text-gray-300">
-                        {submissionDate}
+                        {formatDisplayDate(submissionDate)}
                       </td>
 
                       {/* Urgency Countdown */}

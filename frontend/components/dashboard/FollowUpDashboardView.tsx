@@ -93,22 +93,22 @@ export const parseFollowUpDate = (dateVal: any): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
-// Helper to format a date cleanly as YYYY-MM-DD for UI display
+// Helper to format a date cleanly as DD-MM-YY for UI display
 export const formatDisplayDate = (dateVal: any): string => {
   if (!dateVal) return "—";
   if (dateVal instanceof Date) {
     if (isNaN(dateVal.getTime())) return "—";
-    const yyyy = dateVal.getFullYear();
+    const yy = String(dateVal.getFullYear()).slice(-2);
     const mm = String(dateVal.getMonth() + 1).padStart(2, "0");
     const dd = String(dateVal.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+    return `${dd}-${mm}-${yy}`;
   }
   const parsed = parseFollowUpDate(dateVal);
   if (!parsed) return String(dateVal).trim() || "—";
-  const yyyy = parsed.getFullYear();
+  const yy = String(parsed.getFullYear()).slice(-2);
   const mm = String(parsed.getMonth() + 1).padStart(2, "0");
   const dd = String(parsed.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return `${dd}-${mm}-${yy}`;
 };
 
 // Format a date cleanly as DD/MM/YYYY for storage
