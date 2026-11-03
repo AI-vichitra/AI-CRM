@@ -23,9 +23,6 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        # Route API requests through the Nginx reverse proxy
-        - NEXT_PUBLIC_API_URL=
     expose:
       - "3000"
     environment:
