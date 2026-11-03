@@ -3,19 +3,19 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  TrendingUp, 
-  Compass, 
-  BarChart2, 
-  Database, 
-  Settings, 
-  HelpCircle, 
+import {
+  LayoutDashboard,
+  Compass,
+  Database,
+  Settings,
+  HelpCircle,
   LogOut,
-  FileText,
   Send,
   Calendar,
-  Megaphone
+  Megaphone,
+  PhoneOutgoing,
+  Inbox,
+  Landmark
 } from "lucide-react";
 import { ThemeToggle } from "../ThemeToggle";
 import { api } from "../../lib/api";
@@ -34,7 +34,7 @@ export default function DashboardShell({ children }: DashboardShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentTab = searchParams.get("tab") || "active_leads";
+  const currentTab = searchParams.get("tab") || "dashboard";
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -71,13 +71,14 @@ export default function DashboardShell({ children }: DashboardShellProps) {
   }, [router]);
 
   const navigation = [
-    { name: "Active Leads", href: "/dashboard?tab=active_leads", icon: LayoutDashboard, key: "active_leads" },
-    { name: "PR Leads", href: "/dashboard?tab=pr_leads", icon: Megaphone, key: "pr_leads" },
-    { name: "Follow-Ups", href: "/dashboard?tab=followups", icon: Calendar, key: "followups" },
-    { name: "Proposal Tracker", href: "/dashboard?tab=proposals", icon: Send, key: "proposals" },
-    { name: "Internal Leads", href: "/dashboard?tab=internal_leads", icon: FileText, key: "internal_leads" },
-    { name: "Tender Management", href: "/dashboard?tab=tenders", icon: TrendingUp, key: "tenders" },
+    { name: "Dashboard", href: "/dashboard?tab=dashboard", icon: LayoutDashboard, key: "dashboard" },
+    { name: "Outbound", href: "/dashboard?tab=active_leads", icon: PhoneOutgoing, key: "active_leads" },
+    { name: "Inbound", href: "/dashboard?tab=internal_leads", icon: Inbox, key: "internal_leads" },
+    { name: "PR", href: "/dashboard?tab=pr_leads", icon: Megaphone, key: "pr_leads" },
+    { name: "Government", href: "/dashboard?tab=tenders", icon: Landmark, key: "tenders" },
+    // { name: "Proposal Tracker", href: "/dashboard?tab=proposals", icon: Send, key: "proposals" },
     { name: "Data Platform", href: "/dashboard?tab=data", icon: Database, key: "data" },
+    { name: "Follow-Ups", href: "/dashboard?tab=followups", icon: Calendar, key: "followups" },
   ];
 
   const handleSignOut = async () => {
@@ -135,8 +136,8 @@ export default function DashboardShell({ children }: DashboardShellProps) {
             {navigation.map((item) => {
               const activeParam = searchParams.get("tab");
               const isActive = pathname === "/dashboard" && (
-                activeParam === item.key || 
-                (item.key === "active_leads" && (!activeParam || activeParam === "dashboard" || activeParam === "active_leads"))
+                activeParam === item.key ||
+                (item.key === "dashboard" && !activeParam)
               );
               const Icon = item.icon;
               return (

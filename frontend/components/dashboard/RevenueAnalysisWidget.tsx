@@ -254,7 +254,7 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
 
   return (
     <div className="w-full">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
         {/* Row 1, Col 1: Total Estimated Revenue */}
         <div className="py-2.5 px-3.5 rounded-2xl border border-gray-200/90 dark:border-white/10 bg-white dark:bg-[#111118] flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
           <div className="flex items-center justify-between gap-2">
@@ -374,7 +374,7 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
         </div>
 
         {/* Row 2, Col 1: Won Revenue */}
-        <div className="py-2.5 px-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/30 bg-[#F0FDF4] dark:bg-emerald-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+        {/* <div className="py-2.5 px-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/30 bg-[#F0FDF4] dark:bg-emerald-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider font-sans truncate">
               WON REVENUE
@@ -395,10 +395,10 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
               {hasRevenueData ? `+${formatCurrency(wonRevenue)}` : `${hotCount + warmCount} Leads`}
             </span>
           </div>
-        </div>
+        </div> */}
 
         {/* Row 2, Col 2: Cold Leads */}
-        <div className="py-2.5 px-3.5 rounded-2xl border border-cyan-200/70 dark:border-cyan-900/30 bg-[#F0FDFA] dark:bg-cyan-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+        {/* <div className="py-2.5 px-3.5 rounded-2xl border border-cyan-200/70 dark:border-cyan-900/30 bg-[#F0FDFA] dark:bg-cyan-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="w-2 h-2 rounded-full bg-[#00E5FF] shrink-0" />
@@ -444,10 +444,10 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
               </span>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Row 2, Col 3: Discovery Leads */}
-        <div className="py-2.5 px-3.5 rounded-2xl border border-purple-200/70 dark:border-purple-900/30 bg-[#FAF5FF] dark:bg-purple-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
+        {/* <div className="py-2.5 px-3.5 rounded-2xl border border-purple-200/70 dark:border-purple-900/30 bg-[#FAF5FF] dark:bg-purple-950/20 flex flex-col justify-between shadow-xs transition-all min-h-[68px]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="w-2 h-2 rounded-full bg-[#AA00FF] shrink-0" />
@@ -493,7 +493,7 @@ export default function RevenueAnalysisWidget({ sheetData }: RevenueAnalysisWidg
               </span>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
 import React from "react";
-import { MoreVertical } from "lucide-react";
 
 interface MetricCardProps {
   label: string;
@@ -80,10 +79,10 @@ export default function MetricCard({
         <div className="absolute -right-6 -bottom-6 w-16 h-16 rounded-full bg-emerald-500/10 blur-xl pointer-events-none" />
       )}
 
-      {/* Top Row: Label and Three Dots */}
+      {/* Top Row: Label */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[11px] font-sans font-medium tracking-wide text-gray-500 dark:text-[#888899]">
+          <span className="text-[14px] font-sans font-semibold tracking-wide text-gray-500 dark:text-[#888899]">
             {label}
           </span>
           {isSelected && (
@@ -92,13 +91,6 @@ export default function MetricCard({
             </span>
           )}
         </div>
-        <button 
-          type="button" 
-          onClick={(e) => { e.stopPropagation(); }}
-          className="p-0.5 rounded transition-colors cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5 text-[#888899] hover:text-gray-900 dark:hover:text-white"
-        >
-          <MoreVertical className="w-3.5 h-3.5" />
-        </button>
       </div>
 
       {/* Middle Row: Large Value */}

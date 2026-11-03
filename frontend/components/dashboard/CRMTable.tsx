@@ -288,7 +288,7 @@ export default function CRMTable({
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(8);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
 
   // Dynamic Filters based on headers
   const typeColumn = headers.find(h => h.toLowerCase().includes("type") || h.toLowerCase().includes("channel"));
@@ -754,12 +754,21 @@ export default function CRMTable({
                       // Interactive Stage dropdown (Image 3)
                       if (isStage) {
                         const effectiveVal = getEffectiveVal(row, col).trim();
+                        // const stageOptions = [
+                        //   "Lead",
+                        //   "Contacted",
+                        //   "Proposal sent",
+                        //   "Proposal to be Sent",
+                        //   "Negotiation",
+                        //   "Won",
+                        //   "Lost",
+                        // ];
                         const stageOptions = [
-                          "Lead",
                           "Contacted",
-                          "Proposal sent",
-                          "Proposal to be Sent",
-                          "Negotiation",
+                          "Discovery",
+                          "Pitch",
+                          "Proposal",
+                          "Contract",
                           "Won",
                           "Lost",
                         ];
@@ -794,6 +803,7 @@ export default function CRMTable({
                           "Hot",
                           "Warm",
                           "Cold",
+                          "Trial",
                         ];
                         const matchedOpt = statusOptions.find(o => o.toLowerCase() === effectiveVal.toLowerCase());
                         const selectVal = matchedOpt || effectiveVal;
@@ -904,7 +914,7 @@ export default function CRMTable({
             {Math.min(indexOfLastRow, sortedRows.length)} of {sortedRows.length}{" "}
             entries
           </span>
-          <div className="flex items-center gap-1.5 text-xs">
+          {/* <div className="flex items-center gap-1.5 text-xs">
             <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-[#555566]">Per Page:</span>
             <select
               value={rowsPerPage}
@@ -920,7 +930,7 @@ export default function CRMTable({
                 </option>
               ))}
             </select>
-          </div>
+          </div> */}
         </div>
 
         {totalPages > 1 && (
