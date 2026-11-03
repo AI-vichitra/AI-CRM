@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import DashboardShell from "../../components/dashboard/DashboardShell";
 import MetricCard from "../../components/dashboard/MetricCard";
@@ -11,6 +12,9 @@ import EmptyState from "../../components/dashboard/EmptyState";
 import LeadFormModal from "../../components/dashboard/LeadFormModal";
 import ActionConversationModal from "../../components/dashboard/ActionConversationModal";
 import RevenueAnalysisWidget from "../../components/dashboard/RevenueAnalysisWidget";
+import LeadsTrendWidget from "../../components/dashboard/LeadsTrendWidget";
+import LeadsByChannelWidget from "../../components/dashboard/LeadsByChannelWidget";
+import DateRangeFilter, { DateFilterValue } from "../../components/dashboard/DateRangeFilter";
 import DataPlatformView from "../../components/dashboard/DataPlatformView";
 import ProposalTrackerView from "../../components/dashboard/ProposalTrackerView";
 import FollowUpDashboardView from "../../components/dashboard/FollowUpDashboardView";
@@ -67,6 +71,110 @@ const parseDate = (dateVal: any): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
+// Parses revenue-like cell values, including expressions like "10,00,000 + 27,00,000 (4,50,000 X 6)"
+const parseRevenueValue = (raw: any): number => {
+  if (raw === undefined || raw === null) return 0;
+  const str = String(raw).trim();
+  if (!str || str === "—" || str === "-") return 0;
+
+  const basePart = str.split("(")[0].trim();
+  if (basePart.includes("+")) {
+    return basePart.split("+").reduce((acc, part) => {
+      const clean = part.replace(/[^0-9.-]/g, "").trim();
+      const num = parseFloat(clean);
+      return acc + (isNaN(num) ? 0 : num);
+    }, 0);
+  }
+
+  const clean = basePart.replace(/[^0-9.-]/g, "").trim();
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+};
+
+const findRevenueHeader = (headers: string[] | undefined): string => {
+  if (!headers) return "";
+  return headers.find(h => {
+    const hl = h.toLowerCase();
+    return hl.includes("estimated") || hl.includes("est") || hl.includes("revenue") || hl.includes("estimation");
+  }) || headers.find(h => {
+    const hl = h.toLowerCase();
+    return hl.includes("value") || hl.includes("amount") || hl.includes("deal size");
+  }) || "";
+};
+
+// Date-range presets shared by the Dashboard's "Revenue" and "Lead by Channel" charts
+const RANGE_PRESETS: Record<string, { count: number; offset: number }> = {
+  this_month: { count: 1, offset: 0 },
+  last_month: { count: 1, offset: 1 },
+  "3": { count: 3, offset: 0 },
+  "6": { count: 6, offset: 0 },
+  "12": { count: 12, offset: 0 },
+};
+
+const getRangeMonths = (rangeKey: string): { label: string; year: number; month: number }[] => {
+  const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const preset = RANGE_PRESETS[rangeKey] || RANGE_PRESETS["6"];
+  const now = new Date();
+  const endMonth = new Date(now.getFullYear(), now.getMonth() - preset.offset, 1);
+  return Array.from({ length: preset.count }, (_, i) => {
+    const d = new Date(endMonth.getFullYear(), endMonth.getMonth() - (preset.count - 1 - i), 1);
+    return { label: MONTHS_SHORT[d.getMonth()], year: d.getFullYear(), month: d.getMonth() };
+  });
+};
+
+// Groups a set of Dashboard cards/widgets under a labeled, visually distinct section
+function DashboardSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-[rgba(255,255,255,0.06)] bg-gray-50/60 dark:bg-white/[0.02] p-5">
+      <h3 className="text-xs font-semibold text-gray-500 dark:text-[#888899] tracking-wide uppercase font-mono mb-4">
+        {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+// Resolves a DateFilterValue preset (or custom range) into an actual [start, end] Date range.
+// Returns null for "all" (no filtering).
+const getPresetRange = (filter: DateFilterValue): { start: Date; end: Date } | null => {
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+  if (filter.preset === "today") {
+    return { start: startOfDay(now), end: endOfDay(now) };
+  }
+  if (filter.preset === "this_week") {
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    return { start: startOfDay(start), end: endOfDay(end) };
+  }
+  if (filter.preset === "this_month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { start: startOfDay(start), end: endOfDay(end) };
+  }
+  if (filter.preset === "last_month") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { start: startOfDay(start), end: endOfDay(end) };
+  }
+  if (filter.preset === "this_year") {
+    const start = new Date(now.getFullYear(), 0, 1);
+    const end = new Date(now.getFullYear(), 11, 31);
+    return { start: startOfDay(start), end: endOfDay(end) };
+  }
+  if (filter.preset === "custom" && filter.startDate && filter.endDate) {
+    const s = new Date(`${filter.startDate}T00:00:00`);
+    const e = new Date(`${filter.endDate}T23:59:59.999`);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+    return { start: s, end: e };
+  }
+  return null;
+};
+
 // Helper function to check if a date string is today's date
 const isToday = (dateVal: any): boolean => {
   const d = parseDate(dateVal);
@@ -78,6 +186,8 @@ const isToday = (dateVal: any): boolean => {
     d.getFullYear() === today.getFullYear()
   );
 };
+
+
 
 export default function DashboardPage() {
   return (
@@ -112,9 +222,15 @@ function DashboardContent() {
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAlertPanel, setShowAlertPanel] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState("All");
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: "this_month", startDate: "", endDate: "" });
   const [includeArchived, setIncludeArchived] = useState(false);
   const [selectedKpiTab, setSelectedKpiTab] = useState<string>("Total Leads");
+
+  // Source-breakdown data for the Dashboard cards (Inbound / Outbound / PR / Govt)
+  const [internalLeadsData, setInternalLeadsData] = useState<SheetData | null>(null);
+  const [prLeadsData, setPrLeadsData] = useState<SheetData | null>(null);
+  const [leadsTrendMonths, setLeadsTrendMonths] = useState<string>("6");
+  const [leadsByChannelMonths, setLeadsByChannelMonths] = useState<string>("6");
 
   // Current logged in user
   const [currentUser, setCurrentUser] = useState<{ name?: string; email?: string } | null>(null);
@@ -133,13 +249,19 @@ function DashboardContent() {
       // Target range based on tab: "Internal Leads" for internal leads, "PR Leads" for PR leads, "Active Leads" for Active Leads & Tender
       const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (tab === "pr_leads" ? "PR Leads" : "Active Leads");
 
-      const [sum, data, authStatus] = await Promise.all([
+      const [sum, data, authStatus, internalData, prData] = await Promise.all([
         api.getDashboardSummary(bypassCache),
         api.getSheetData(bypassCache, targetTabRange),
         api.getAuthStatus().catch(() => null),
+        tab === "dashboard" ? api.getSheetData(bypassCache, "Internal Leads").catch(() => null) : Promise.resolve(null),
+        tab === "dashboard" ? api.getSheetData(bypassCache, "PR Leads").catch(() => null) : Promise.resolve(null),
       ]);
       setSummary(sum);
       setSheetData(data);
+      if (tab === "dashboard") {
+        setInternalLeadsData(internalData);
+        setPrLeadsData(prData);
+      }
       if (authStatus?.authenticated) {
         let cleanName = authStatus.name || "";
         if (!cleanName && authStatus.email) {
@@ -304,7 +426,7 @@ function DashboardContent() {
         await api.addLead(leadDataInput, targetTabRange);
         toast.success("Lead added successfully");
         // Reset filters so the newly added lead is immediately visible
-        setSelectedMonth("All");
+        setDateFilter({ preset: "all", startDate: "", endDate: "" });
         setSelectedKpiTab("Total Leads");
         setSearchTerm("");
       }
@@ -404,47 +526,8 @@ function DashboardContent() {
   }) || sheetData?.headers[3] || "";
   const stageCol = sheetData?.headers.find(h => h.toLowerCase().includes("stage") || h.toLowerCase().includes("status")) || sheetData?.headers[2] || "";
 
-  const getMonthName = (m: number): string => {
-    const months = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
-    return months[m - 1] || "";
-  };
-
-  // Get unique months list for dropdown
-  const uniqueMonths = React.useMemo(() => {
-    if (!sheetData || !sheetData.rows || !dateCol) return [];
-    const monthsMap: Record<string, string> = {};
-    
-    sheetData.rows.forEach(row => {
-      const dateVal = row[dateCol];
-      if (!dateVal) return;
-      const parts = String(dateVal).trim().replace(/\s+/g, "").split(/[-/.]/);
-      if (parts.length === 3) {
-        const p0 = parseInt(parts[0], 10);
-        const p1 = parseInt(parts[1], 10);
-        const p2 = parseInt(parts[2], 10);
-        if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
-          let y = p2;
-          let m = p1;
-          if (parts[0].length === 4) {
-            y = p0;
-            m = p1;
-          }
-          const mKey = `${y}-${String(m).padStart(2, '0')}`;
-          monthsMap[mKey] = `${getMonthName(m)} ${y}`;
-        }
-      }
-    });
-
-    return Object.keys(monthsMap)
-      .sort()
-      .map(key => ({
-        key,
-        label: monthsMap[key]
-      }));
-  }, [sheetData, dateCol]);
+  // Resolved date range from the active preset/custom date filter
+  const activeDateRange = React.useMemo(() => getPresetRange(dateFilter), [dateFilter]);
 
   const isTendersTab = tab === "tenders";
   const isInternalLeadsTab = tab === "internal_leads";
@@ -490,14 +573,11 @@ function DashboardContent() {
     }
 
     let finalRows = rows;
-    if (selectedMonth !== "All" && dateCol) {
+    if (activeDateRange && dateCol) {
       finalRows = rows.filter(row => {
-        const dateVal = row[dateCol];
-        if (!dateVal) return false;
-        const d = parseDate(dateVal);
+        const d = parseDate(row[dateCol]);
         if (!d) return false;
-        const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        return mKey === selectedMonth;
+        return d >= activeDateRange.start && d <= activeDateRange.end;
       });
     }
 
@@ -514,7 +594,7 @@ function DashboardContent() {
     }
 
     return finalRows;
-  }, [sheetData, selectedMonth, dateCol, isTendersTab, isInternalLeadsTab, includeArchived]);
+  }, [sheetData, activeDateRange, dateCol, isTendersTab, isInternalLeadsTab, includeArchived]);
 
   const filteredSheetData = React.useMemo<SheetData | null>(() => {
     if (!sheetData) return null;
@@ -552,6 +632,83 @@ function DashboardContent() {
     };
   }, [sheetData, includeArchived]);
 
+  // Source breakdown for the Dashboard cards: Inbound (Internal Leads), Outbound (Active Leads),
+  // PR (PR Leads), Govt (Tenders within Active Leads)
+  const sourceBreakdown = React.useMemo(() => {
+    const outboundDateCol = sheetData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const prDateCol = prLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+
+    const inRange = (row: Record<string, any>, col: string) => {
+      if (!activeDateRange || !col) return true;
+      const d = parseDate(row[col]);
+      return !!d && d >= activeDateRange.start && d <= activeDateRange.end;
+    };
+
+    const countVisible = (data: SheetData | null, dateColForData: string) => {
+      if (!data || !data.rows) return 0;
+      return data.rows.filter(row => (includeArchived || !row._is_hidden) && inRange(row, dateColForData)).length;
+    };
+
+    const sourceColName = sheetData?.headers.find(h => {
+      const hl = h.toLowerCase().trim();
+      return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
+    }) || "Source";
+
+    const tenderCount = sheetData?.rows
+      ? sheetData.rows.filter(row => {
+          if (!includeArchived && row._is_hidden) return false;
+          if (!inRange(row, outboundDateCol)) return false;
+          return String(row[sourceColName] || "").trim().toLowerCase() === "tender";
+        }).length
+      : 0;
+
+    const outboundCount = (activeLeadsSheetData?.rows || []).filter(row => inRange(row, outboundDateCol)).length;
+
+    return {
+      outbound: outboundCount,
+      inbound: countVisible(internalLeadsData, inboundDateCol),
+      pr: countVisible(prLeadsData, prDateCol),
+      govt: tenderCount,
+    };
+  }, [sheetData, activeLeadsSheetData, internalLeadsData, prLeadsData, includeArchived, activeDateRange]);
+
+  // Combined revenue data for the Dashboard tab's Revenue Analysis widget:
+  // Active Leads (Outbound + Govt/Tender) + Internal Leads (Inbound) + PR Leads (PR), all summed together
+  const dashboardRevenueSheetData = React.useMemo<SheetData | null>(() => {
+    if (!sheetData) return null;
+
+    const byMonth = (rows: Record<string, any>[]) => {
+      if (!activeDateRange || !dateCol) return rows;
+      return rows.filter(row => {
+        const d = parseDate(row[dateCol]);
+        if (!d) return false;
+        return d >= activeDateRange.start && d <= activeDateRange.end;
+      });
+    };
+
+    const visible = (rows: Record<string, any>[]) => rows.filter(row => includeArchived || !row._is_hidden);
+
+    const combinedRows = [
+      ...byMonth(visible(sheetData.rows || [])),
+      ...byMonth(visible(internalLeadsData?.rows || [])),
+      ...byMonth(visible(prLeadsData?.rows || [])),
+    ];
+
+    const headerSet = new Set<string>([
+      ...sheetData.headers,
+      ...(internalLeadsData?.headers || []),
+      ...(prLeadsData?.headers || []),
+    ]);
+
+    return {
+      ...sheetData,
+      headers: Array.from(headerSet),
+      rows: combinedRows,
+      total: combinedRows.length,
+    };
+  }, [sheetData, internalLeadsData, prLeadsData, includeArchived, activeDateRange, dateCol]);
+
   // Helper to categorize lead rows
   const getLeadCategory = (row: Record<string, any>): "won" | "lost" | "active" => {
     const stgVals: string[] = [];
@@ -585,6 +742,87 @@ function DashboardContent() {
     return "active";
   };
 
+  // Dashboard "Leads" trend: Inbound / Outbound / PR / Government estimated revenue for the selected duration
+  const leadsTrendData = React.useMemo(() => {
+    const months = getRangeMonths(leadsTrendMonths);
+
+    const outboundRows = (activeLeadsSheetData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+    const inboundRows = (internalLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+    const prRows = (prLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+
+    const sourceColName = sheetData?.headers.find(h => {
+      const hl = h.toLowerCase().trim();
+      return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
+    }) || "Source";
+    const govtRows = (sheetData?.rows || []).filter(row => {
+      if (!includeArchived && row._is_hidden) return false;
+      return String(row[sourceColName] || "").trim().toLowerCase() === "tender";
+    });
+
+    const outboundDateCol = sheetData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const prDateCol = prLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+
+    const outboundRevenueCol = findRevenueHeader(sheetData?.headers);
+    const inboundRevenueCol = findRevenueHeader(internalLeadsData?.headers);
+    const prRevenueCol = findRevenueHeader(prLeadsData?.headers);
+
+    const sumRevenueForMonth = (rows: Record<string, any>[], dateCol: string, revenueCol: string, m: { year: number; month: number }) => {
+      if (!dateCol || !revenueCol) return 0;
+      return rows.reduce((sum, row) => {
+        const d = parseDate(row[dateCol]);
+        if (!d || d.getFullYear() !== m.year || d.getMonth() !== m.month) return sum;
+        return sum + parseRevenueValue(row[revenueCol]);
+      }, 0);
+    };
+
+    return months.map(m => ({
+      name: m.label,
+      Inbound: sumRevenueForMonth(inboundRows, inboundDateCol, inboundRevenueCol, m),
+      Outbound: sumRevenueForMonth(outboundRows, outboundDateCol, outboundRevenueCol, m),
+      PR: sumRevenueForMonth(prRows, prDateCol, prRevenueCol, m),
+      Government: sumRevenueForMonth(govtRows, outboundDateCol, outboundRevenueCol, m),
+    }));
+  }, [activeLeadsSheetData, internalLeadsData, prLeadsData, sheetData, includeArchived, leadsTrendMonths]);
+
+  // Dashboard "Lead by Channel": month-wise lead counts for Inbound / Outbound / PR / Government
+  const leadsByChannelData = React.useMemo(() => {
+    const months = getRangeMonths(leadsByChannelMonths);
+
+    const outboundRows = (activeLeadsSheetData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+    const inboundRows = (internalLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+    const prRows = (prLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+
+    const sourceColName = sheetData?.headers.find(h => {
+      const hl = h.toLowerCase().trim();
+      return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
+    }) || "Source";
+    const govtRows = (sheetData?.rows || []).filter(row => {
+      if (!includeArchived && row._is_hidden) return false;
+      return String(row[sourceColName] || "").trim().toLowerCase() === "tender";
+    });
+
+    const outboundDateCol = sheetData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const prDateCol = prLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+
+    const countForMonth = (rows: Record<string, any>[], col: string, m: { year: number; month: number }) => {
+      if (!col) return 0;
+      return rows.filter(row => {
+        const d = parseDate(row[col]);
+        return !!d && d.getFullYear() === m.year && d.getMonth() === m.month;
+      }).length;
+    };
+
+    return months.map(m => ({
+      name: m.label,
+      Inbound: countForMonth(inboundRows, inboundDateCol, m),
+      Outbound: countForMonth(outboundRows, outboundDateCol, m),
+      PR: countForMonth(prRows, prDateCol, m),
+      Government: countForMonth(govtRows, outboundDateCol, m),
+    }));
+  }, [activeLeadsSheetData, internalLeadsData, prLeadsData, sheetData, includeArchived, leadsByChannelMonths]);
+
   // Calculate display KPIs dynamically based on filtered rows (strictly 4 tabs: Total Leads, Active Leads, Closed Won, Closed Lost)
   const displayKpis = React.useMemo(() => {
     if (!sheetData) return [];
@@ -603,12 +841,38 @@ function DashboardContent() {
     });
 
     return [
-      { label: "Total Leads", value: totalRows.toLocaleString("en-IN"), delta: "+12%" },
-      { label: "Active Leads", value: activeCount.toLocaleString("en-IN"), delta: "+4%" },
-      { label: "Closed Won", value: closedWonCount.toLocaleString("en-IN"), delta: "+0%" },
-      { label: "Closed Lost", value: closedLostCount.toLocaleString("en-IN"), delta: "+0%" }
+      { label: "Total Leads", value: totalRows.toLocaleString("en-IN")},
+      { label: "Active Leads", value: activeCount.toLocaleString("en-IN")},
+      { label: "Won", value: closedWonCount.toLocaleString("en-IN")},
+      { label: "Lost", value: closedLostCount.toLocaleString("en-IN") }
     ];
   }, [filteredRows, sheetData]);
+
+  // Dashboard "Lead Overview" KPIs: Total/Active/Won/Lost combined across all 4 channels
+  // (Inbound + Outbound + PR + Government), reusing the same combined dataset as the Revenue chart
+  const dashboardOverviewKpis = React.useMemo(() => {
+    if (!dashboardRevenueSheetData) return [];
+    const rows = dashboardRevenueSheetData.rows;
+    const totalRows = rows.length;
+
+    let activeCount = 0;
+    let closedWonCount = 0;
+    let closedLostCount = 0;
+
+    rows.forEach(row => {
+      const cat = getLeadCategory(row);
+      if (cat === "won") closedWonCount++;
+      else if (cat === "lost") closedLostCount++;
+      else activeCount++;
+    });
+
+    return [
+      { label: "Total Leads", value: totalRows.toLocaleString("en-IN") },
+      { label: "Active Leads", value: activeCount.toLocaleString("en-IN") },
+      { label: "Won", value: closedWonCount.toLocaleString("en-IN") },
+      { label: "Lost", value: closedLostCount.toLocaleString("en-IN") },
+    ];
+  }, [dashboardRevenueSheetData]);
 
   // Table rows filtered by the selected KPI tab
   const tableRows = React.useMemo(() => {
@@ -784,6 +1048,230 @@ function DashboardContent() {
             </div>
           </div>
         </div>
+      ) : tab === "dashboard" && sheetData ? (
+        <div className="space-y-6 relative">
+          {/* Due Today Alert Box floating in the top right */}
+          {dueTodayLeads.length > 0 && showAlertPanel && (
+            <div className="fixed top-6 right-6 z-50 w-80 bg-red-50/95 dark:bg-[#1E0D10]/95 border border-red-200 dark:border-red-900/50 rounded-2xl border-l-4 border-l-red-500 p-4 shadow-2xl animate-fade-in transition-all flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </div>
+                  <span className="text-xs font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 font-sans">
+                    <Bell className="w-3.5 h-3.5 text-red-500" />
+                    Leads Due Today ({dueTodayLeads.length})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowAlertPanel(false)}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-white/5 rounded text-gray-400 dark:text-[#555566] hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                {dueTodayLeads.map((lead, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 bg-gray-50/50 dark:bg-[#161622] rounded-xl border border-black dark:border-black flex items-center justify-between text-[11px] font-sans"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-900 dark:text-white truncate">
+                        {lead["Company"] || lead["Campaign"] || "Unnamed Lead"}
+                      </p>
+                      <p className="text-[10px] text-gray-400 dark:text-[#888899] truncate">
+                        {lead["Name"] ? `Contact: ${lead["Name"]}` : (lead["Stage"] ? `Stage: ${lead["Stage"]}` : "No contact details")}
+                      </p>
+                    </div>
+                    {lead["Value"] && (
+                      <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 ml-2 shrink-0 font-mono">
+                        {lead["Value"]}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Dashboard Title & Actions */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h1 className="font-sans text-2xl text-gray-900 dark:text-white font-bold tracking-tight">
+                Dashboard
+              </h1>
+
+              {sheetData && <DateRangeFilter value={dateFilter} onChange={setDateFilter} />}
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {!sheetData?.is_mock && (
+                <>
+                  {/* Unhidden vs All Leads Toggle */}
+                  {sheetData && (sheetData.hidden_count || 0) > 0 && (
+                    <button
+                      onClick={() => setIncludeArchived(!includeArchived)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans font-semibold transition-all cursor-pointer border ${
+                        includeArchived
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 shadow-xs"
+                          : "bg-white dark:bg-[#111118] hover:bg-gray-50 dark:hover:bg-[#1C1C2D] border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300"
+                      }`}
+                      title={includeArchived ? "Switch back to viewing only unhidden active leads" : `Include ${sheetData.hidden_count} hidden/archived rows from Google Sheets`}
+                    >
+                      {includeArchived ? (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-amber-500" />
+                          <span>All Leads ({filteredRows.length})</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Active Leads Only ({filteredRows.length})</span>
+                          <span className="text-[10px] text-gray-400 font-normal">
+                            ({sheetData.hidden_count} hidden)
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* <button
+                    onClick={handleAddLead}
+                    className="px-3 py-1.5 bg-white dark:bg-[#111118] hover:bg-gray-55 dark:hover:bg-[#1C1C2D] text-gray-700 dark:text-white border border-gray-200 dark:border-[rgba(255,255,255,0.06)] rounded-lg text-xs font-sans font-semibold transition-all cursor-pointer"
+                  >
+                    + Add Lead
+                  </button> */}
+
+                  {/* <button
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    className="p-1.5 bg-white dark:bg-[rgba(255,255,255,0.03)] hover:bg-gray-55 dark:hover:bg-[rgba(255,255,255,0.08)] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] text-gray-700 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs font-sans"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-emerald-500 dark:text-emerald-400" : ""}`} />
+                    Sync Now
+                  </button> */}
+
+                  <button
+                    onClick={() => setShowAlertPanel(prev => !prev)}
+                    className={`relative p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center ${
+                      showAlertPanel
+                        ? "bg-red-50 border-red-200 text-red-600 dark:bg-red-950/30 dark:border-red-900/40 dark:text-red-400"
+                        : "bg-white dark:bg-[rgba(255,255,255,0.03)] hover:bg-gray-50 dark:hover:bg-[rgba(255,255,255,0.08)] border border-gray-200 dark:border-[rgba(255,255,255,0.06)] text-gray-700 dark:text-white"
+                    }`}
+                    title="Toggle Due Today Alerts"
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    {dueTodayLeads.length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white shadow-sm">
+                        {dueTodayLeads.length}
+                      </span>
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Lead Overview: combined across Inbound + Outbound + PR + Government */}
+          <DashboardSection title="Lead Overview">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {dashboardOverviewKpis.map((kpi, index) => (
+                <MetricCard
+                  key={kpi.label}
+                  label={kpi.label}
+                  value={String(kpi.value)}
+                  index={index}
+                />
+              ))}
+            </div>
+          </DashboardSection>
+
+          {/* Estimated Revenue: combined across Inbound + Outbound + PR + Government */}
+          {dashboardRevenueSheetData && (
+            <DashboardSection title="Estimated Revenue">
+              <RevenueAnalysisWidget sheetData={dashboardRevenueSheetData} />
+            </DashboardSection>
+          )}
+
+          {/* Lead Source Breakdown: Inbound (Internal Leads) / Outbound (Active Leads) / PR (PR Leads) / Govt (Tenders) */}
+          <DashboardSection title="Lead Source Breakdown">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: "Outbound", tab: "active_leads", count: sourceBreakdown.outbound, dot: "#3B82F6", bar: "#3B82F6", border: "border-blue-200/70 dark:border-blue-900/30", bg: "bg-[#EFF6FF] dark:bg-blue-950/20" },
+                { label: "Inbound", tab: "internal_leads", count: sourceBreakdown.inbound, dot: "#10B981", bar: "#10B981", border: "border-emerald-200/70 dark:border-emerald-900/30", bg: "bg-[#F0FDF4] dark:bg-emerald-950/20" },
+                { label: "PR", tab: "pr_leads", count: sourceBreakdown.pr, dot: "#D946EF", bar: "#D946EF", border: "border-fuchsia-200/70 dark:border-fuchsia-900/30", bg: "bg-[#FDF4FF] dark:bg-fuchsia-950/20" },
+                { label: "Government", tab: "tenders", count: sourceBreakdown.govt, dot: "#F97316", bar: "#F97316", border: "border-orange-200/70 dark:border-orange-900/30", bg: "bg-[#FFF7ED] dark:bg-orange-950/20" },
+              ].map((card) => {
+                const sourceTotal = sourceBreakdown.inbound + sourceBreakdown.outbound + sourceBreakdown.pr + sourceBreakdown.govt;
+                const pct = sourceTotal > 0 ? (card.count / sourceTotal) * 100 : 0;
+                return (
+                  <Link
+                    key={card.label}
+                    href={`/dashboard?tab=${card.tab}`}
+                    className={`py-2.5 px-3.5 rounded-2xl border ${card.border} ${card.bg} flex flex-col justify-between shadow-xs transition-all min-h-[68px] cursor-pointer hover:shadow-md hover:-translate-y-0.5`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: card.dot }} />
+                        <span className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">{card.label}</span>
+                      </div>
+                      {/* <span className="text-xs font-mono text-gray-400 dark:text-[#777788] shrink-0">({card.count.toLocaleString("en-IN")})</span> */}
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-white font-sans tracking-tight truncate shrink-0">
+                        {card.count.toLocaleString("en-IN")} Leads
+                      </span>
+                      <div className="flex items-center gap-2 flex-1 max-w-[130px]">
+                        <div className="w-full bg-gray-200/80 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%`, backgroundColor: card.bar }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-gray-400 dark:text-[#888899] font-mono shrink-0">
+                          {pct.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </DashboardSection>
+
+          {/* Trends: Revenue & Lead by Channel over time */}
+          <DashboardSection title="Trends">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <LeadsTrendWidget data={leadsTrendData} rangeMonths={leadsTrendMonths} onRangeMonthsChange={setLeadsTrendMonths} />
+              <LeadsByChannelWidget data={leadsByChannelData} rangeMonths={leadsByChannelMonths} onRangeMonthsChange={setLeadsByChannelMonths} />
+            </div>
+          </DashboardSection>
+
+          {/* Lead CRUD Modal */}
+          <LeadFormModal
+            isOpen={isLeadModalOpen}
+            onClose={() => setIsLeadModalOpen(false)}
+            headers={sheetData.headers}
+            initialData={selectedLead}
+            onSave={handleSaveLead}
+            title={modalTitle}
+            currentTab={tab}
+            mandatoryColumns={summary?.mandatory_columns || []}
+            defaultCogPoc={currentUser?.name}
+          />
+
+          {/* Action Conversation Modal */}
+          <ActionConversationModal
+            isOpen={isActionModalOpen}
+            onClose={() => setIsActionModalOpen(false)}
+            lead={selectedActionLead}
+            onSaveLead={handleSaveLead}
+            currentUser={currentUser}
+          />
+        </div>
       ) : (
         <div className="space-y-6 relative">
           {/* Due Today Alert Box floating in the top right */}
@@ -849,21 +1337,8 @@ function DashboardContent() {
                   ? "Help"
                   : "Active Leads"}
               </h1>
-              
-              {sheetData && uniqueMonths.length > 0 && (
-                <div className="relative">
-                  <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#111118] hover:bg-gray-50 dark:hover:bg-[#1C1C2D] border border-gray-250 dark:border-[rgba(255,255,255,0.08)] text-gray-700 dark:text-white text-xs font-sans font-semibold rounded-lg transition-all cursor-pointer outline-none"
-                  >
-                    <option value="All">All Months</option>
-                    {uniqueMonths.map(m => (
-                      <option key={m.key} value={m.key}>{m.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+
+              {sheetData && <DateRangeFilter value={dateFilter} onChange={setDateFilter} />}
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -943,7 +1418,7 @@ function DashboardContent() {
                   key={kpi.label}
                   label={kpi.label}
                   value={String(kpi.value)}
-                  delta={kpi.delta}
+                  // delta={kpi.delta}
                   index={index}
                   isSelected={isSelected}
                   onClick={() => {
