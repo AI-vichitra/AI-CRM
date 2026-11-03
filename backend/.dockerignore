@@ -1,0 +1,11 @@
+.env
+.env.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+token.json
+config_store.json
+*.db
+alerts.db
+.git
