@@ -1101,7 +1101,7 @@ function DashboardContent() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <h1 className="font-sans text-2xl text-gray-900 dark:text-white font-bold tracking-tight">
-                Dashboard
+                Timeline
               </h1>
 
               {sheetData && <DateRangeFilter value={dateFilter} onChange={setDateFilter} />}
