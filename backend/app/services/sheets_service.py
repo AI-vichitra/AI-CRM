@@ -71,15 +71,19 @@ def _get_service():
                     f.write(creds.to_json())
             return build("sheets", "v4", credentials=creds, cache_discovery=False)
         except Exception as refresh_err:
-            print(f"Failed to refresh Google token: {refresh_err}. Removing invalid token.json")
-            if os.path.exists(token_path):
-                try:
-                    os.remove(token_path)
-                except Exception:
-                    pass
-            raise RuntimeError(
-                "Google Sheets authentication expired or was revoked. Please log in again in the settings page."
-            )
+            err_str = str(refresh_err).lower()
+            if "invalid_grant" in err_str:
+                print(f"Google token was revoked or permanently expired: {refresh_err}. Removing invalid token.json")
+                if os.path.exists(token_path):
+                    try:
+                        os.remove(token_path)
+                    except Exception:
+                        pass
+                raise RuntimeError(
+                    "Google Sheets authentication expired or was revoked. Please log in again in the settings page."
+                )
+            print(f"Failed to refresh Google token (temporary or network error): {refresh_err}")
+            raise RuntimeError(f"Google Sheets authorization refresh error: {refresh_err}")
         
     if settings.google_credentials_json and re.match(r'.*\.json$', settings.google_credentials_json):
         creds = ServiceAccountCredentials.from_service_account_file(
@@ -127,7 +131,7 @@ def _fetch_public_csv(sheet_url: str) -> dict:
     csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     
     try:
-        response = httpx.get(csv_url, follow_redirects=True, timeout=10.0)
+        response = httpx.get(csv_url, follow_redirects=True, timeout=3.0)
     except Exception as e:
         raise RuntimeError(f"Network error trying to fetch Google Sheet: {e}")
         
@@ -270,6 +274,8 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                 
             final_range = target_sheet.get("properties", {}).get("title") if target_sheet else range_name
         except Exception as meta_err:
+            if "does not have permission" in str(meta_err).lower() or "403" in str(meta_err):
+                raise meta_err
             print(f"Failed to fetch sheet metadata (falling back to range '{range_name}'): {meta_err}")
             final_range = range_name
 
@@ -285,6 +291,8 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
             if sheets_data and sheets_data[0].get("data") and sheets_data[0]["data"][0].get("rowMetadata"):
                 row_metadata_list = sheets_data[0]["data"][0]["rowMetadata"]
         except Exception as meta_err:
+            if "does not have permission" in str(meta_err).lower() or "403" in str(meta_err):
+                raise meta_err
             print(f"Failed to fetch row visibility metadata: {meta_err}")
 
         # 3. Fetch values with fallback if specified range does not exist
@@ -296,6 +304,8 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
                 .execute()
             )
         except Exception as range_err:
+            if "does not have permission" in str(range_err).lower() or "403" in str(range_err):
+                raise range_err
             print(f"Failed to fetch range '{final_range}': {range_err}. Retrying with default sheet '{first_sheet_title}'...")
             result = (
                 service.spreadsheets()
@@ -542,7 +552,10 @@ def fetch_sheet_data(sheet_url: str, range_name: str = "Sheet1", bypass_cache: b
             return data
         except Exception as csv_err:
             print(f"Public CSV fallback failed: {csv_err}")
-            raise RuntimeError(f"Google Sheets API Error: {api_err}. Fallback Error: {csv_err}")
+            raise RuntimeError(
+                "This Google Sheet is private or requires authorization. "
+                "To link it: Click 'Sign in with Google' in the Admin Panel to authorize, or set Share to 'Anyone with the link' as 'Viewer' in Google Sheets."
+            )
 
 import json as _json_mod
 

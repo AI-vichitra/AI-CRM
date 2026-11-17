@@ -128,6 +128,17 @@ To avoid mixing public/corporate tenders with standard sales accounts:
   * **Overdue**: Submission deadline is in the past and stage is not Won/Lost.
   * **Due Soon**: Submission deadline is between `0` and `3` days from today.
   * **Open**: More than 3 days remaining before submission deadline.
+* **Government / Tender Tab Columns**:
+  1. `Tender ID`
+  2. `Client`
+  3. `Date of Entry`
+  4. `Tender Name`
+  5. `Category`
+  6. `Tender Value`
+  7. `Submission Date`
+  8. `Bid Opening Date`
+  9. `Stage`
+  10. `Status`
 
 ---
 
@@ -166,3 +177,22 @@ To avoid mixing public/corporate tenders with standard sales accounts:
   * Rows hidden or collapsed directly in Google Sheets (via Google Sheet filter views or row hides) are flagged as `_is_hidden = true`.
   * By default, hidden rows are filtered out of the CRM dashboard to keep the active view clean.
   * Users can click the **Include Hidden Leads** toggle in the top bar to inspect archived or filtered rows.
+
+---
+
+## 10. Lead Source Classification (Inbound vs Outbound)
+
+Leads are categorized into **Outbound** or **Inbound** based on their `Source` / `Lead Source` column value, dynamically configured in the Admin Panel (`/admin`):
+
+* **Configurable Admin Mapping**:
+  * Config parameter: `outbound_sources: string[]` stored in `backend/config_store.json`.
+  * **Default Rule**: `LinkedIn` is configured as **Outbound**.
+  * **Inbound Classification**: All non-tender, non-outbound sources (e.g. `Website`, `Referral`, `Direct`, `Direct mail`, `Inbound`, `Internal`, etc.) are categorized as **Inbound**.
+  * **Government / Tender Reservation**: Any row where `Source == 'Tender'` is strictly routed to the Government tab and excluded from Inbound/Outbound.
+* **Effects Across the CRM**:
+  1. **Dashboard KPI Breakdown**: `sourceBreakdown.outbound` counts leads whose source matches `outbound_sources`; `sourceBreakdown.inbound` counts all other non-tender leads.
+  2. **Analytics Widgets**: Both the **Leads Trend** (revenue by channel) and **Lead by Channel** (volume by month) widgets group revenue and deal count according to this classification.
+  3. **Sidebar Navigation Tabs**:
+     * `/dashboard?tab=active_leads` ("Outbound"): Filters rows strictly where `Source` matches configured Outbound sources.
+     * `/dashboard?tab=internal_leads` ("Inbound"): Filters rows strictly where `Source` matches Inbound sources.
+     * `/dashboard?tab=tenders` ("Government"): Shows strictly `Tender` rows with the 10 dedicated government columns.

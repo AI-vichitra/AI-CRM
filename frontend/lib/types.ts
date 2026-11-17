@@ -8,6 +8,7 @@ export interface SheetData {
   sheet_tab?: string;
   configured: boolean;
   is_mock?: boolean;
+  error?: string;
 }
 
 export interface Config {
@@ -23,6 +24,8 @@ export interface Config {
   email_test_recipient?: string;
   email_prod_recipients?: string[];
   email_bcc_recipients?: string[];
+  outbound_sources?: string[];
+  inbound_sources?: string[];
 }
 
 export interface GraphConfig {
@@ -41,6 +44,8 @@ export interface DashboardSummary {
   column_order: string[];
   graphs: GraphConfig[];
   mandatory_columns?: string[];
+  outbound_sources?: string[];
+  inbound_sources?: string[];
 }
 
 export interface Conversation {

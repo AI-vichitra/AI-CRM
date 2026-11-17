@@ -18,6 +18,8 @@ class ConfigUpdate(BaseModel):
     email_test_recipient: Optional[str] = None
     email_prod_recipients: Optional[List[str]] = None
     email_bcc_recipients: Optional[List[str]] = None
+    outbound_sources: Optional[List[str]] = None
+    inbound_sources: Optional[List[str]] = None
 
 @router.get("/")
 def get_config():

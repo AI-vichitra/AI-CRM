@@ -45,7 +45,14 @@ def get_sheet_data(bypass_cache: bool = False, sheet_range: Optional[str] = None
         data["configured"] = is_configured
         return data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            from app.services import leads_service
+            fallback_data = leads_service.get_all_leads()
+            fallback_data["configured"] = False
+            fallback_data["error"] = str(e)
+            return fallback_data
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/auth")
 def oauth_auth(redirect_url: str = "http://localhost:3000/dashboard", mode: Optional[str] = None):

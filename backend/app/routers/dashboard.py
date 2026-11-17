@@ -45,7 +45,13 @@ def get_summary(bypass_cache: bool = False):
     range_name = cfg.get("sheet_range", "Sheet1")
     is_configured = bool(sheet_url)
 
-    data = sheets_service.fetch_sheet_data(sheet_url or "mock", range_name, bypass_cache=bypass_cache)
+    try:
+        data = sheets_service.fetch_sheet_data(sheet_url or "mock", range_name, bypass_cache=bypass_cache)
+    except Exception as e:
+        print(f"Warning: Failed to fetch sheet data for summary: {e}. Falling back to local database/mock.")
+        from app.services import leads_service
+        data = leads_service.get_all_leads()
+        is_configured = False
     total_rows = data["total"]
 
     # Dynamic columns scan
@@ -171,6 +177,7 @@ def get_summary(bypass_cache: bool = False):
         "column_order": cfg.get("column_order", []),
         "graphs": cfg.get("graphs", []),
         "mandatory_columns": cfg.get("mandatory_columns", []),
+        "outbound_sources": cfg.get("outbound_sources", ["LinkedIn"]),
     }
 
 

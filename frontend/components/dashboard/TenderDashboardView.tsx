@@ -187,39 +187,53 @@ export default function TenderDashboardView({
   const idCol = headers.find(h => {
     const hl = h.toLowerCase().trim();
     return hl === "tender id" || hl.includes("tender id") || hl === "lead id" || hl.includes("ref");
-  }) || "Lead ID";
+  }) || "Tender ID";
+
+  const clientCol = headers.find(h => {
+    const hl = h.toLowerCase().trim();
+    return hl === "client" || hl.includes("client") || hl === "organization" || hl.includes("organization") || hl === "company";
+  }) || "Client";
+  const orgCol = clientCol;
+
+  const dateOfEntryCol = headers.find(h => {
+    const hl = h.toLowerCase().trim();
+    return hl === "date of entry" || hl.includes("date of entry") || hl === "entry date" || hl === "publish date" || hl.includes("publish") || hl === "date";
+  }) || "Date of Entry";
+  const publishDateCol = dateOfEntryCol;
 
   const nameCol = headers.find(h => {
     const hl = h.toLowerCase().trim();
     return hl === "tender name" || hl.includes("tender name") || hl === "requirement" || hl.includes("project");
-  }) || "Requirement";
+  }) || "Tender Name";
 
-  const orgCol = headers.find(h => {
+  const categoryCol = headers.find(h => {
     const hl = h.toLowerCase().trim();
-    return hl === "organization" || hl.includes("organization") || hl === "company" || hl.includes("client");
-  }) || "Company";
+    return hl === "category" || hl.includes("category") || hl === "type of project" || hl.includes("domain") || hl.includes("scope");
+  }) || "Category";
 
-  const publishDateCol = headers.find(h => {
+  const valueCol = headers.find(h => {
     const hl = h.toLowerCase().trim();
-    return hl === "publish date" || hl.includes("publish") || hl === "date";
-  }) || "Date";
+    return hl === "tender value" || hl.includes("tender value") || hl === "revenue estimations" || hl === "value" || hl.includes("amount") || hl.includes("budget");
+  }) || "Tender Value";
 
   const submissionDateCol = headers.find(h => {
     const hl = h.toLowerCase().trim();
-    return hl === "last submission date" || hl.includes("submission") || hl === "deadline" || hl.includes("due");
-  }) || "Deadline";
+    return hl === "submission date" || hl.includes("submission date") || hl === "last submission date" || hl.includes("submission") || hl === "deadline" || hl.includes("due");
+  }) || "Submission Date";
 
   const bidOpeningDateCol = headers.find(h => {
     const hl = h.toLowerCase().trim();
     return hl === "bid opening date" || hl.includes("bid opening") || hl.includes("opening") || hl === "follow up date";
-  }) || "Follow up date";
+  }) || "Bid Opening Date";
 
   const stageCol = headers.find(h => h.toLowerCase().trim() === "stage" || h.toLowerCase().includes("stage")) || "Stage";
+  const statusCol = headers.find(h => {
+    const hl = h.toLowerCase().trim();
+    return hl === "status" || hl.includes("status") || hl === "lead status" || hl === "tender status";
+  }) || "Status";
   const stateCol = headers.find(h => ["state", "location", "region", "city"].some(x => h.toLowerCase().includes(x))) || "State / Location";
-  const valueCol = headers.find(h => ["tender value", "revenue estimations", "value", "amount", "budget"].some(x => h.toLowerCase().includes(x))) || "Revenue Estimations";
   const typeCol = headers.find(h => ["tender type", "type", "lead type"].some(x => h.toLowerCase().includes(x))) || "Tender Type";
-  const categoryCol = headers.find(h => ["category", "type of project", "domain", "scope"].some(x => h.toLowerCase().includes(x))) || "Type of Project";
-  const notesCol = headers.find(h => ["notes / remarks", "notes", "remarks", "last update", "follow-up"].some(x => h.toLowerCase().includes(x))) || "Last Update";
+  const notesCol = headers.find(h => ["notes / remarks", "notes", "remarks", "last update", "follow-up"].some(x => h.toLowerCase().includes(x))) || "Notes / Remarks";
 
   // Today reference
   const today = useMemo(() => {
@@ -386,6 +400,34 @@ export default function TenderDashboardView({
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to update stage");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  // Handle status change (1-click transition)
+  const handleUpdateStatus = async (tender: Record<string, any>, newStatus: string) => {
+    if (!onSaveLead) return;
+    const rowNum = tender["_row_num"];
+    if (!rowNum) {
+      toast.error("Invalid tender row index");
+      return;
+    }
+
+    setUpdatingId(rowNum);
+    try {
+      const updated = {
+        ...tender,
+        [statusCol]: newStatus,
+        Source: tender["Source"] || "Tender",
+      };
+      await onSaveLead(updated);
+      toast.success(`Tender status updated to "${newStatus}"`);
+      if (detailTender && detailTender._row_num === rowNum) {
+        setDetailTender({ ...detailTender, ...updated });
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
     } finally {
       setUpdatingId(null);
     }
@@ -717,15 +759,16 @@ export default function TenderDashboardView({
           <table className="w-full border-collapse text-left text-xs font-sans">
             <thead>
               <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161622]/40 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-[#888899]">
-                <th className="py-3 px-4">Tender ID</th>
-                <th className="py-3 px-4">Tender Name & Scope</th>
-                <th className="py-3 px-4">Organization / Client</th>
-                <th className="py-3 px-4">Type</th>
-                <th className="py-3 px-4">Tender Value</th>
-                <th className="py-3 px-4">Stage</th>
-                <th className="py-3 px-4">Last Submission Date</th>
-                <th className="py-3 px-4">Countdown</th>
-                <th className="py-3 px-4 text-center">Manage</th>
+                <th className="py-3 px-4 whitespace-nowrap">Tender ID</th>
+                <th className="py-3 px-4 whitespace-nowrap">Client</th>
+                <th className="py-3 px-4 whitespace-nowrap">Date of Entry</th>
+                <th className="py-3 px-4 whitespace-nowrap">Tender Name</th>
+                <th className="py-3 px-4 whitespace-nowrap">Category</th>
+                <th className="py-3 px-4 whitespace-nowrap">Tender Value</th>
+                <th className="py-3 px-4 whitespace-nowrap">Submission Date</th>
+                <th className="py-3 px-4 whitespace-nowrap">Bid Opening Date</th>
+                <th className="py-3 px-4 whitespace-nowrap">Stage</th>
+                <th className="py-3 px-4 whitespace-nowrap">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-white/5">
@@ -733,12 +776,15 @@ export default function TenderDashboardView({
                 filteredTenders.map((tender, idx) => {
                   const rowNum = tender["_row_num"] || tender[idCol];
                   const tenderId = String(tender[idCol] || `TND-${1000 + Number(rowNum)}`);
-                  const tenderName = String(tender[nameCol] || "Unnamed Tender");
-                  const organization = String(tender[orgCol] || "Unspecified Authority");
+                  const client = String(tender[clientCol] || tender["Client"] || tender["Organization"] || tender["Company"] || "—");
+                  const dateOfEntry = tender[dateOfEntryCol] || tender["Date of Entry"] || tender["Publish Date"] || tender["Date"] || "—";
+                  const tenderName = String(tender[nameCol] || tender["Tender Name"] || "Unnamed Tender");
+                  const category = String(tender[categoryCol] || tender["Category"] || tender["Type of Project"] || "—");
                   const rawVal = tender[valueCol];
+                  const submissionDate = tender[submissionDateCol] || tender["Submission Date"] || tender["Last Submission Date"] || tender["Deadline"] || "—";
+                  const bidOpeningDate = tender[bidOpeningDateCol] || tender["Bid Opening Date"] || tender["Follow up date"] || "—";
                   const stage = tender._normStage;
-                  const typeVal = String(tender[typeCol] || "Open");
-                  const submissionDate = tender[submissionDateCol] || "—";
+                  const statusVal = String(tender[statusCol] || tender["Status"] || tender["Lead Status"] || "").trim();
                   const daysRemaining = tender._daysRemaining;
                   const isOverdue = tender._isOverdue;
                   const isDueSoon = tender._isDueSoon;
@@ -755,12 +801,22 @@ export default function TenderDashboardView({
                           : ""
                       }`}
                     >
-                      {/* Tender ID */}
-                      <td className="py-3 px-4 font-mono font-semibold text-gray-900 dark:text-white">
+                      {/* 1. Tender ID */}
+                      <td className="py-3 px-4 font-mono font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                         {tenderId}
                       </td>
 
-                      {/* Tender Name (Click to open Tender Detail Page) */}
+                      {/* 2. Client */}
+                      <td className="py-3 px-4 text-gray-700 dark:text-gray-300 max-w-[170px] truncate font-medium" title={client}>
+                        {client}
+                      </td>
+
+                      {/* 3. Date of Entry */}
+                      <td className="py-3 px-4 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        {formatDisplayDate(dateOfEntry)}
+                      </td>
+
+                      {/* 4. Tender Name */}
                       <td className="py-3 px-4 font-bold text-gray-900 dark:text-white max-w-[240px]">
                         <button
                           onClick={() => setDetailTender(tender)}
@@ -777,25 +833,47 @@ export default function TenderDashboardView({
                         )}
                       </td>
 
-                      {/* Organization */}
-                      <td className="py-3 px-4 text-gray-700 dark:text-gray-300 max-w-[180px] truncate" title={organization}>
-                        {organization}
+                      {/* 5. Category */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {category && category !== "—" ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/5">
+                            {category}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 font-mono">—</span>
+                        )}
                       </td>
 
-                      {/* Tender Type Badge */}
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300">
-                          {typeVal}
-                        </span>
-                      </td>
-
-                      {/* Tender Value */}
-                      <td className="py-3 px-4 font-mono font-bold text-gray-900 dark:text-white">
+                      {/* 6. Tender Value */}
+                      <td className="py-3 px-4 font-mono font-bold text-gray-900 dark:text-white whitespace-nowrap">
                         {formatCurrency(rawVal)}
                       </td>
 
-                      {/* Stage Dropdown Selector (Live 1-Click Update) */}
-                      <td className="py-3 px-4">
+                      {/* 7. Submission Date */}
+                      <td className="py-3 px-4 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        <div>{formatDisplayDate(submissionDate)}</div>
+                        {daysRemaining !== null && (
+                          daysRemaining < 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 mt-0.5">
+                              <AlertTriangle className="w-2 h-2" />
+                              Expired
+                            </span>
+                          ) : daysRemaining <= 3 ? (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 mt-0.5">
+                              <Clock className="w-2 h-2" />
+                              {daysRemaining === 0 ? "Due Today" : `${daysRemaining}d left`}
+                            </span>
+                          ) : null
+                        )}
+                      </td>
+
+                      {/* 8. Bid Opening Date */}
+                      <td className="py-3 px-4 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        {formatDisplayDate(bidOpeningDate)}
+                      </td>
+
+                      {/* 9. Stage */}
+                      <td className="py-3 px-4 whitespace-nowrap">
                         <select
                           disabled={updatingId === rowNum}
                           value={stage}
@@ -816,76 +894,43 @@ export default function TenderDashboardView({
                         </select>
                       </td>
 
-                      {/* Last Submission Date */}
-                      <td className="py-3 px-4 font-mono text-gray-700 dark:text-gray-300">
-                        {formatDisplayDate(submissionDate)}
-                      </td>
-
-                      {/* Urgency Countdown */}
-                      <td className="py-3 px-4">
-                        {daysRemaining !== null ? (
-                          daysRemaining < 0 ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
-                              <AlertTriangle className="w-2.5 h-2.5" />
-                              Expired ({Math.abs(daysRemaining)}d ago)
-                            </span>
-                          ) : daysRemaining === 0 ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse">
-                              <Clock className="w-2.5 h-2.5" />
-                              Due Today
-                            </span>
-                          ) : daysRemaining <= 3 ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                              <Clock className="w-2.5 h-2.5" />
-                              {daysRemaining}d left
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400">
-                              {daysRemaining} days left
-                            </span>
-                          )
-                        ) : (
-                          <span className="text-gray-400 font-mono">—</span>
-                        )}
-                      </td>
-
-                      {/* Manage Actions */}
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Open Detail Page */}
-                          <button
-                            onClick={() => setDetailTender(tender)}
-                            className="p-1 rounded bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 transition-colors cursor-pointer"
-                            title="Open Tender Detail Page"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          {/* Edit Details */}
-                          <button
-                            onClick={() => { setEditingTender(tender); setIsEditModalOpen(true); }}
-                            className="p-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 transition-colors cursor-pointer"
-                            title="Edit Tender Record"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          {/* Delete Record */}
-                          {onDeleteLead && (
-                            <button
-                              onClick={() => handleDeleteTenderClick(tender)}
-                              className="p-1 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 transition-colors cursor-pointer"
-                              title="Delete tender"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                      {/* 10. Status */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <select
+                          disabled={updatingId === rowNum}
+                          value={statusVal || ""}
+                          onChange={(e) => handleUpdateStatus(tender, e.target.value)}
+                          className={`text-[10px] font-mono font-semibold px-2 py-1 rounded-lg border outline-none cursor-pointer ${
+                            statusVal.toLowerCase() === "hot"
+                              ? "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40"
+                              : statusVal.toLowerCase() === "warm"
+                              ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/40"
+                              : statusVal.toLowerCase() === "cold"
+                              ? "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/40"
+                              : statusVal.toLowerCase() === "active" || statusVal.toLowerCase() === "won"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40"
+                              : "bg-gray-50 text-gray-800 border-gray-200 dark:bg-[#161622] dark:text-gray-200 dark:border-white/10"
+                          }`}
+                        >
+                          <option value="">-- Status --</option>
+                          <option value="Hot">Hot</option>
+                          <option value="Warm">Warm</option>
+                          <option value="Cold">Cold</option>
+                          <option value="Active">Active</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Won">Won</option>
+                          <option value="Lost">Lost</option>
+                          {statusVal && !["hot", "warm", "cold", "active", "pending", "won", "lost"].includes(statusVal.toLowerCase()) && (
+                            <option value={statusVal}>{statusVal}</option>
                           )}
-                        </div>
+                        </select>
                       </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-gray-400 dark:text-[#555566] text-xs">
+                  <td colSpan={10} className="py-12 text-center text-gray-400 dark:text-[#555566] text-xs">
                     No tenders match the selected filters.
                   </td>
                 </tr>
@@ -972,17 +1017,17 @@ export default function TenderDashboardView({
               {/* Mandatory Detailed Tender Specifications Grid */}
               <div>
                 <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] mb-3">
-                  Mandatory Tender Details
+                  Tender Specifications
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                  {/* 1. State / Location */}
+                  {/* 1. Client */}
                   <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
-                      <MapPin className="w-3 h-3 text-amber-500" />
-                      State / Location
+                      <Building2 className="w-3 h-3 text-amber-500" />
+                      Client
                     </span>
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white">
-                      {detailTender[stateCol] || <span className="text-gray-400 italic font-normal">Not specified</span>}
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate" title={detailTender[clientCol] || detailTender[orgCol]}>
+                      {detailTender[clientCol] || detailTender[orgCol] || <span className="text-gray-400 italic font-normal">Unspecified</span>}
                     </p>
                   </div>
 
@@ -997,20 +1042,10 @@ export default function TenderDashboardView({
                     </p>
                   </div>
 
-                  {/* 3. Tender Type */}
+                  {/* 3. Category */}
                   <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
-                      <Tag className="w-3 h-3 text-blue-500" />
-                      Tender Type
-                    </span>
-                    <p className="text-xs font-bold font-mono text-blue-600 dark:text-blue-400">
-                      {detailTender[typeCol] || "Open"}
-                    </p>
-                  </div>
-
-                  {/* 4. Category */}
-                  <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 font-semibold block">
+                      <Layers className="w-3 h-3 text-blue-500" />
                       Category
                     </span>
                     <p className="text-xs font-semibold text-gray-900 dark:text-white">
@@ -1018,29 +1053,29 @@ export default function TenderDashboardView({
                     </p>
                   </div>
 
-                  {/* 5. Publish Date */}
+                  {/* 4. Date of Entry */}
                   <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
                       <Calendar className="w-3 h-3 text-gray-400" />
-                      Publish Date
+                      Date of Entry
                     </span>
                     <p className="text-xs font-mono font-semibold text-gray-900 dark:text-white">
-                      {detailTender[publishDateCol] || "—"}
+                      {detailTender[dateOfEntryCol] || detailTender[publishDateCol] || "—"}
                     </p>
                   </div>
 
-                  {/* 6. Last Submission Date */}
+                  {/* 5. Submission Date */}
                   <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
                       <Clock className="w-3 h-3 text-rose-500" />
-                      Last Submission Date
+                      Submission Date
                     </span>
                     <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">
                       {detailTender[submissionDateCol] || "—"}
                     </p>
                   </div>
 
-                  {/* 7. Bid Opening Date */}
+                  {/* 6. Bid Opening Date */}
                   <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
                       <Calendar className="w-3 h-3 text-purple-500" />
@@ -1048,6 +1083,39 @@ export default function TenderDashboardView({
                     </span>
                     <p className="text-xs font-mono font-semibold text-purple-600 dark:text-purple-400">
                       {detailTender[bidOpeningDateCol] || "—"}
+                    </p>
+                  </div>
+
+                  {/* 7. Status */}
+                  <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
+                      <Tag className="w-3 h-3 text-indigo-500" />
+                      Status
+                    </span>
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white">
+                      {detailTender[statusCol] || detailTender["Status"] || <span className="text-gray-400 italic font-normal">—</span>}
+                    </p>
+                  </div>
+
+                  {/* 8. State / Location */}
+                  <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
+                      <MapPin className="w-3 h-3 text-amber-500" />
+                      State / Location
+                    </span>
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white">
+                      {detailTender[stateCol] || <span className="text-gray-400 italic font-normal">Not specified</span>}
+                    </p>
+                  </div>
+
+                  {/* 9. Tender Type */}
+                  <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/5 space-y-1">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1 font-semibold">
+                      <Tag className="w-3 h-3 text-blue-500" />
+                      Tender Type
+                    </span>
+                    <p className="text-xs font-bold font-mono text-blue-600 dark:text-blue-400">
+                      {detailTender[typeCol] || "Open"}
                     </p>
                   </div>
                 </div>
@@ -1124,11 +1192,14 @@ export default function TenderDashboardView({
           fieldNames={{
             id: idCol,
             name: nameCol,
-            org: orgCol,
-            publishDate: publishDateCol,
+            client: clientCol,
+            org: clientCol,
+            dateOfEntry: dateOfEntryCol,
+            publishDate: dateOfEntryCol,
             submissionDate: submissionDateCol,
             bidOpeningDate: bidOpeningDateCol,
             stage: stageCol,
+            status: statusCol,
             state: stateCol,
             value: valueCol,
             type: typeCol,
@@ -1164,15 +1235,16 @@ function TenderFormModal({
     if (initialData) {
       setFormData({
         ...initialData,
-        [fieldNames.publishDate]: formatDateForInput(initialData[fieldNames.publishDate]),
+        [fieldNames.dateOfEntry || fieldNames.publishDate]: formatDateForInput(initialData[fieldNames.dateOfEntry || fieldNames.publishDate]),
         [fieldNames.submissionDate]: formatDateForInput(initialData[fieldNames.submissionDate]),
         [fieldNames.bidOpeningDate]: formatDateForInput(initialData[fieldNames.bidOpeningDate]),
       });
     } else {
       setFormData({
         [fieldNames.stage]: "Tender Identified",
+        [fieldNames.status]: "Active",
         [fieldNames.type]: "Open",
-        [fieldNames.publishDate]: formatDateForInput(new Date()),
+        [fieldNames.dateOfEntry || fieldNames.publishDate]: formatDateForInput(new Date()),
       });
     }
   }, [initialData, isOpen, fieldNames]);
@@ -1213,7 +1285,54 @@ function TenderFormModal({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Tender Name */}
+            {/* 1. Tender ID */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
+                Tender ID / Reference Number
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. GEM/2026/B/12345 or Auto-assigned"
+                value={formData[fieldNames.id] || ""}
+                onChange={(e) => handleChange(fieldNames.id, e.target.value)}
+                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500 font-mono"
+              />
+            </div>
+
+            {/* 2. Client */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
+                Client / Organization Authority *
+              </label>
+              <input
+                required
+                type="text"
+                placeholder="e.g. NCERT, UNICEF, IIM Jammu..."
+                value={formData[fieldNames.client || fieldNames.org] || ""}
+                onChange={(e) => {
+                  handleChange(fieldNames.client || fieldNames.org, e.target.value);
+                  if (fieldNames.org && fieldNames.org !== fieldNames.client) {
+                    handleChange(fieldNames.org, e.target.value);
+                  }
+                }}
+                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500"
+              />
+            </div>
+
+            {/* 3. Date of Entry */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
+                Date of Entry
+              </label>
+              <input
+                type="date"
+                value={formData[fieldNames.dateOfEntry || fieldNames.publishDate] || ""}
+                onChange={(e) => handleChange(fieldNames.dateOfEntry || fieldNames.publishDate, e.target.value)}
+                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500"
+              />
+            </div>
+
+            {/* 4. Tender Name */}
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
                 Tender Name / Requirement Scope *
@@ -1228,39 +1347,65 @@ function TenderFormModal({
               />
             </div>
 
-            {/* Organization */}
+            {/* 5. Category */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Organization / Client Authority *
+                Category
               </label>
               <input
-                required
                 type="text"
-                placeholder="e.g. NCERT, UNICEF, IIM Jammu..."
-                value={formData[fieldNames.org] || ""}
-                onChange={(e) => handleChange(fieldNames.org, e.target.value)}
+                placeholder="e.g. Creative, Website, Media, Consulting"
+                value={formData[fieldNames.category] || ""}
+                onChange={(e) => handleChange(fieldNames.category, e.target.value)}
                 className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500"
               />
             </div>
 
-            {/* Tender ID */}
+            {/* 6. Tender Value */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Tender ID / Reference Number
+                Tender Value (₹ INR)
               </label>
               <input
                 type="text"
-                placeholder="e.g. GEM/2026/B/12345 or Auto-assigned"
-                value={formData[fieldNames.id] || ""}
-                onChange={(e) => handleChange(fieldNames.id, e.target.value)}
+                placeholder="e.g. 25,00,000"
+                value={formData[fieldNames.value] || ""}
+                onChange={(e) => handleChange(fieldNames.value, e.target.value)}
                 className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500 font-mono"
               />
             </div>
 
-            {/* Tender Stage Dropdown */}
+            {/* 7. Submission Date */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Tender Stage (Dropdown) *
+                Submission Date *
+              </label>
+              <input
+                required
+                type="date"
+                value={formData[fieldNames.submissionDate] || ""}
+                onChange={(e) => handleChange(fieldNames.submissionDate, e.target.value)}
+                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500 font-mono font-semibold"
+              />
+            </div>
+
+            {/* 8. Bid Opening Date */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
+                Bid Opening Date
+              </label>
+              <input
+                type="date"
+                value={formData[fieldNames.bidOpeningDate] || ""}
+                onChange={(e) => handleChange(fieldNames.bidOpeningDate, e.target.value)}
+                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500"
+              />
+            </div>
+
+            {/* 9. Stage */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
+                Stage (Dropdown) *
               </label>
               <select
                 value={formData[fieldNames.stage] || "Tender Identified"}
@@ -1273,34 +1418,24 @@ function TenderFormModal({
               </select>
             </div>
 
-            {/* Tender Type Dropdown */}
+            {/* 10. Status */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Tender Type (Dropdown) *
+                Status (Dropdown)
               </label>
               <select
-                value={formData[fieldNames.type] || "Open"}
-                onChange={(e) => handleChange(fieldNames.type, e.target.value)}
+                value={formData[fieldNames.status] || "Active"}
+                onChange={(e) => handleChange(fieldNames.status, e.target.value)}
                 className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500 cursor-pointer font-mono"
               >
-                {TENDER_TYPES.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
+                <option value="Active">Active</option>
+                <option value="Hot">Hot</option>
+                <option value="Warm">Warm</option>
+                <option value="Cold">Cold</option>
+                <option value="Pending">Pending</option>
+                <option value="Won">Won</option>
+                <option value="Lost">Lost</option>
               </select>
-            </div>
-
-            {/* Tender Value */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Tender Value (₹ INR)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 25,00,000"
-                value={formData[fieldNames.value] || ""}
-                onChange={(e) => handleChange(fieldNames.value, e.target.value)}
-                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500 font-mono"
-              />
             </div>
 
             {/* State / Location */}
@@ -1317,58 +1452,20 @@ function TenderFormModal({
               />
             </div>
 
-            {/* Category */}
+            {/* Tender Type Dropdown */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Category
+                Tender Type (Dropdown) *
               </label>
-              <input
-                type="text"
-                placeholder="e.g. Creative, Website, Media, Consulting"
-                value={formData[fieldNames.category] || ""}
-                onChange={(e) => handleChange(fieldNames.category, e.target.value)}
-                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500"
-              />
-            </div>
-
-            {/* Publish Date */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Publish Date
-              </label>
-              <input
-                type="date"
-                value={formData[fieldNames.publishDate] || ""}
-                onChange={(e) => handleChange(fieldNames.publishDate, e.target.value)}
-                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500"
-              />
-            </div>
-
-            {/* Last Submission Date */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Last Submission Date *
-              </label>
-              <input
-                required
-                type="date"
-                value={formData[fieldNames.submissionDate] || ""}
-                onChange={(e) => handleChange(fieldNames.submissionDate, e.target.value)}
-                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500 font-mono font-semibold"
-              />
-            </div>
-
-            {/* Bid Opening Date */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899] font-bold">
-                Bid Opening Date
-              </label>
-              <input
-                type="date"
-                value={formData[fieldNames.bidOpeningDate] || ""}
-                onChange={(e) => handleChange(fieldNames.bidOpeningDate, e.target.value)}
-                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500"
-              />
+              <select
+                value={formData[fieldNames.type] || "Open"}
+                onChange={(e) => handleChange(fieldNames.type, e.target.value)}
+                className="w-full px-3.5 py-2 text-xs bg-gray-50 dark:bg-[#161622] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-500 cursor-pointer font-mono"
+              >
+                {TENDER_TYPES.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
             </div>
 
             {/* Notes / Remarks */}

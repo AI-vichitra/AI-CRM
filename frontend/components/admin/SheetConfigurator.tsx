@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { CheckCircle2, XCircle, AlertCircle, Database, Upload, FileSpreadsheet, RefreshCw, AlertTriangle, ShieldCheck, Save, Mail, Trash2, Plus, ClipboardList, Send, Eye, X, Sparkles, Clock, Check, ExternalLink } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Database, Upload, FileSpreadsheet, RefreshCw, AlertTriangle, ShieldCheck, Save, Mail, Trash2, Plus, ClipboardList, Send, Eye, X, Sparkles, Clock, Check, ExternalLink, ArrowRightLeft, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Config } from "@/lib/types";
@@ -111,6 +111,112 @@ export default function SheetConfigurator() {
       toast.success(`Updated validation for ${header}`);
     } catch (err: any) {
       toast.error("Failed to update config");
+    }
+  };
+
+  // Lead Source Classification States & Handlers
+  const DEFAULT_KNOWN_SOURCES = [
+    "LinkedIn",
+    "Website",
+    "Referral",
+    "Direct",
+    "Direct mail",
+    "Inbound",
+    "Internal",
+    "Outbound"
+  ];
+
+  const normalizeSourceName = (raw: string): string => {
+    const trimmed = raw.trim();
+    const lower = trimmed.toLowerCase();
+    // Normalize case & typos like LinkedIIn -> LinkedIn
+    if (lower === "linkedin" || lower === "linkediin") return "LinkedIn";
+    if (lower === "website") return "Website";
+    if (lower === "referral") return "Referral";
+    if (lower === "direct") return "Direct";
+    if (lower === "direct mail") return "Direct mail";
+    if (lower === "inbound") return "Inbound";
+    if (lower === "internal") return "Internal";
+    if (lower === "outbound") return "Outbound";
+    if (lower === "dm") return "DM";
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  };
+
+  const dedupeSources = (sources: string[]): string[] => {
+    const map = new Map<string, string>();
+    for (const s of sources) {
+      const normalized = normalizeSourceName(s);
+      const key = normalized.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, normalized);
+      }
+    }
+    return Array.from(map.values());
+  };
+
+  const [knownSources, setKnownSources] = useState<string[]>(DEFAULT_KNOWN_SOURCES);
+  const [customSourceInput, setCustomSourceInput] = useState<string>("");
+
+  const outboundSources = React.useMemo(() => {
+    return config.outbound_sources && config.outbound_sources.length > 0
+      ? config.outbound_sources
+      : ["LinkedIn"];
+  }, [config.outbound_sources]);
+
+  const handleSetSourceClassification = async (source: string, type: "outbound" | "inbound") => {
+    const normSource = source.trim();
+    const currentOutbound = [...outboundSources];
+    const isCurrentlyOutbound = currentOutbound.some(
+      (s) => s.toLowerCase() === normSource.toLowerCase()
+    );
+
+    let updatedOutbound: string[];
+    if (type === "outbound") {
+      if (!isCurrentlyOutbound) {
+        updatedOutbound = [...currentOutbound, normSource];
+      } else {
+        updatedOutbound = currentOutbound;
+      }
+    } else {
+      updatedOutbound = currentOutbound.filter(
+        (s) => s.toLowerCase() !== normSource.toLowerCase()
+      );
+    }
+
+    try {
+      await api.updateConfig({ outbound_sources: updatedOutbound });
+      setConfig((prev) => ({ ...prev, outbound_sources: updatedOutbound }));
+      toast.success(`"${normSource}" mapped to ${type === "outbound" ? "Outbound" : "Inbound"}`);
+    } catch (err: any) {
+      toast.error("Failed to update source configuration");
+    }
+  };
+
+  const handleAddCustomSource = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = normalizeSourceName(customSourceInput.trim());
+    if (!clean) return;
+    if (clean.toLowerCase() === "tender") {
+      toast.error("'Tender' is reserved for Government Tenders and cannot be classified as Inbound/Outbound.");
+      return;
+    }
+    if (knownSources.some((s) => s.toLowerCase() === clean.toLowerCase())) {
+      toast.error(`"${clean}" is already in the list`);
+      return;
+    }
+    setKnownSources((prev) => dedupeSources([...prev, clean]));
+    setCustomSourceInput("");
+    toast.success(`Added "${clean}". You can now set it as Inbound or Outbound.`);
+  };
+
+  const handleResetSourceDefaults = async () => {
+    const defaultOutbound = ["LinkedIn"];
+    try {
+      await api.updateConfig({ outbound_sources: defaultOutbound });
+      setConfig((prev) => ({ ...prev, outbound_sources: defaultOutbound }));
+      toast.success("Reset to defaults: LinkedIn as Outbound, others as Inbound.");
+    } catch (err: any) {
+      toast.error("Failed to reset source classification");
     }
   };
 
@@ -350,22 +456,64 @@ export default function SheetConfigurator() {
       setRangeInput(cfg.sheet_range || "Active Leads");
       setTabsList(cfg.sheet_tabs && cfg.sheet_tabs.length > 0 ? cfg.sheet_tabs : ["Active Leads", "Internal Leads"]);
 
-      const data = await api.getSheetData(true);
-      setDbStatus({
-        loaded: true,
-        row_count: data.rows ? data.rows.length : 0,
-        headers: data.headers || [],
-        is_local_db: !isSheetsMode,
-      });
-
-      if (isSheetsMode) {
-        setTestResult({
-          tested: true,
-          success: true,
+      try {
+        const data = await api.getSheetData(true);
+        setDbStatus({
+          loaded: true,
           row_count: data.rows ? data.rows.length : 0,
           headers: data.headers || [],
-          is_mock: data.is_mock
+          is_local_db: !isSheetsMode,
         });
+
+        if (cfg.outbound_sources && cfg.outbound_sources.length > 0) {
+          setKnownSources((prev) => dedupeSources([...prev, ...cfg.outbound_sources!]));
+        }
+
+        if (data && data.rows && data.rows.length > 0) {
+          const detected: string[] = [];
+          data.rows.forEach((r: any) => {
+            for (const [k, v] of Object.entries(r)) {
+              const kl = k.toLowerCase().trim();
+              if ((kl === "source" || kl === "sources" || kl.includes("source") || kl.includes("lead source")) && v) {
+                const val = String(v).trim();
+                if (val && val.toLowerCase() !== "tender") {
+                  detected.push(val);
+                }
+              }
+            }
+          });
+          if (detected.length > 0) {
+            setKnownSources((prev) => dedupeSources([...prev, ...detected]));
+          }
+        }
+
+        if (isSheetsMode) {
+          setTestResult({
+            tested: true,
+            success: !data.error,
+            row_count: data.rows ? data.rows.length : 0,
+            headers: data.headers || [],
+            is_mock: data.is_mock,
+            message: data.error
+          });
+        }
+      } catch (sheetErr: any) {
+        console.warn("Sheet data not yet available or authentication required:", sheetErr);
+        setDbStatus({
+          loaded: false,
+          row_count: 0,
+          headers: [],
+          is_local_db: !isSheetsMode,
+        });
+        if (isSheetsMode) {
+          setTestResult({
+            tested: true,
+            success: false,
+            row_count: 0,
+            headers: [],
+            message: sheetErr.message || "Google Sheets authorization required. Please sign in below."
+          });
+        }
       }
     } catch (err: any) {
       console.error("Failed to load status:", err);
@@ -1318,6 +1466,165 @@ export default function SheetConfigurator() {
             {isSendingBoth ? "Dispatching Both..." : "Dispatch Both Emails Now (Test Run)"}
           </button>
         </div>
+      </div>
+
+      {/* Lead Source Classification Card (Inbound vs Outbound) */}
+      <div className="bg-white dark:bg-[#0C0C12]/20 rounded-xl p-6 border border-gray-200 dark:border-[rgba(255,255,255,0.06)] shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 rounded-lg border border-indigo-500/20 text-indigo-400">
+              <ArrowRightLeft className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-white tracking-wide">
+                Lead Source Classification (Inbound vs Outbound)
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-[#888899]">
+                Configure which lead sources are counted and filtered under Outbound vs Inbound
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetSourceDefaults}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-white/10 rounded-lg bg-gray-50 dark:bg-white/[0.02] hover:bg-gray-100 dark:hover:bg-white/5 transition-all cursor-pointer self-start sm:self-auto"
+            title="Reset to default: LinkedIn as Outbound, others as Inbound"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Defaults</span>
+          </button>
+        </div>
+
+        {/* Current Classification Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          <div className="p-3.5 rounded-lg border border-blue-500/20 bg-blue-500/5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                Outbound Sources ({outboundSources.length})
+              </span>
+              <span className="text-[10px] font-mono text-blue-500/80 uppercase">Target: Outbound Tab</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {outboundSources.length === 0 ? (
+                <span className="text-xs text-gray-400 italic">None selected</span>
+              ) : (
+                outboundSources.map((s) => (
+                  <span
+                    key={s}
+                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30"
+                  >
+                    {s}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                Inbound Sources ({knownSources.filter((s) => !outboundSources.some((o) => o.toLowerCase() === s.toLowerCase())).length})
+              </span>
+              <span className="text-[10px] font-mono text-emerald-500/80 uppercase">Target: Inbound Tab</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {knownSources
+                .filter((s) => !outboundSources.some((o) => o.toLowerCase() === s.toLowerCase()))
+                .map((s) => (
+                  <span
+                    key={s}
+                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                  >
+                    {s}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Source Matrix List */}
+        <div className="space-y-3 pt-2">
+          <p className="text-xs font-mono uppercase tracking-wider text-gray-500 dark:text-[#888899]">
+            Source Mapping Table
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {knownSources.map((source) => {
+              const isOutbound = outboundSources.some((s) => s.toLowerCase() === source.toLowerCase());
+              return (
+                <div
+                  key={source}
+                  className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    isOutbound
+                      ? "border-blue-500/30 bg-blue-500/5 shadow-[0_0_12px_rgba(59,130,246,0.03)]"
+                      : "border-emerald-500/30 bg-emerald-500/5 shadow-[0_0_12px_rgba(16,185,129,0.03)]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: isOutbound ? "#3B82F6" : "#10B981" }}
+                    />
+                    <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">
+                      {source}
+                    </span>
+                  </div>
+
+                  {/* Segmented Inbound / Outbound toggle */}
+                  <div className="flex items-center bg-gray-100 dark:bg-white/5 p-0.5 rounded-lg border border-gray-200 dark:border-white/10 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleSetSourceClassification(source, "inbound")}
+                      className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                        !isOutbound
+                          ? "bg-emerald-600 text-white shadow-sm"
+                          : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                      }`}
+                    >
+                      {!isOutbound && <Check className="w-3 h-3" />}
+                      Inbound
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetSourceClassification(source, "outbound")}
+                      className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                        isOutbound
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                      }`}
+                    >
+                      {isOutbound && <Check className="w-3 h-3" />}
+                      Outbound
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Add Custom Source Input */}
+        <form onSubmit={handleAddCustomSource} className="pt-2 flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            value={customSourceInput}
+            onChange={(e) => setCustomSourceInput(e.target.value)}
+            placeholder="Add custom source (e.g. Cold Email, Apollo, Twitter, Upwork)..."
+            className="flex-1 px-3.5 py-2 text-xs bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 focus:border-indigo-500 rounded-lg text-gray-900 dark:text-white outline-none"
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Source</span>
+          </button>
+        </form>
+
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 italic">
+          * Note: Leads with source "Tender" are reserved for Government Tenders and automatically routed to the Government tab.
+        </p>
       </div>
 
       {/* Mandatory Form Fields Card */}

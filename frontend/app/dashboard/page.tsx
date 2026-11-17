@@ -246,22 +246,17 @@ function DashboardContent() {
 
   async function loadData(showToast = false, bypassCache = false) {
     try {
-      // Target range based on tab: "Internal Leads" for internal leads, "PR Leads" for PR leads, "Active Leads" for Active Leads & Tender
-      const targetTabRange = tab === "internal_leads" ? "Internal Leads" : (tab === "pr_leads" ? "PR Leads" : "Active Leads");
-
       const [sum, data, authStatus, internalData, prData] = await Promise.all([
         api.getDashboardSummary(bypassCache),
-        api.getSheetData(bypassCache, targetTabRange),
+        api.getSheetData(bypassCache, tab === "pr_leads" ? "PR Leads" : "Active Leads"),
         api.getAuthStatus().catch(() => null),
-        tab === "dashboard" ? api.getSheetData(bypassCache, "Internal Leads").catch(() => null) : Promise.resolve(null),
-        tab === "dashboard" ? api.getSheetData(bypassCache, "PR Leads").catch(() => null) : Promise.resolve(null),
+        api.getSheetData(bypassCache, "Internal Leads").catch(() => null),
+        api.getSheetData(bypassCache, "PR Leads").catch(() => null),
       ]);
       setSummary(sum);
       setSheetData(data);
-      if (tab === "dashboard") {
-        setInternalLeadsData(internalData);
-        setPrLeadsData(prData);
-      }
+      setInternalLeadsData(internalData);
+      setPrLeadsData(prData);
       if (authStatus?.authenticated) {
         let cleanName = authStatus.name || "";
         if (!cleanName && authStatus.email) {
@@ -359,7 +354,12 @@ function DashboardContent() {
   };
 
   const handleAddLead = () => {
-    setSelectedLead(null);
+    const defaultSource = tab === "active_leads" 
+      ? (outboundSources[0] ? outboundSources[0].charAt(0).toUpperCase() + outboundSources[0].slice(1) : "LinkedIn")
+      : tab === "tenders" 
+      ? "Tender"
+      : "Website";
+    setSelectedLead({ Source: defaultSource });
     setModalTitle("Add New Lead");
     setIsLeadModalOpen(true);
   };
@@ -382,11 +382,7 @@ function DashboardContent() {
 
     try {
       setRefreshing(true);
-      const targetTabRange = tab === "internal_leads" 
-        ? "Internal Leads" 
-        : tab === "pr_leads"
-        ? "PR Leads"
-        : (row._sheet_tab || "Active Leads");
+      const targetTabRange = row._sheet_tab || (tab === "pr_leads" ? "PR Leads" : "Active Leads");
       await api.deleteLead(rowNum, targetTabRange);
       toast.success("Lead deleted successfully");
       await loadData(false, true);
@@ -405,11 +401,7 @@ function DashboardContent() {
         (selectedActionLead && selectedActionLead._row_num) ||
         (selectedLead && selectedLead._row_num);
 
-      const targetTabRange = tab === "internal_leads" 
-        ? "Internal Leads" 
-        : tab === "pr_leads"
-        ? "PR Leads"
-        : ((leadDataInput._sheet_tab || (selectedActionLead && selectedActionLead._sheet_tab) || (selectedLead && selectedLead._sheet_tab)) || "Active Leads");
+      const targetTabRange = ((leadDataInput._sheet_tab || (selectedActionLead && selectedActionLead._sheet_tab) || (selectedLead && selectedLead._sheet_tab)) || (tab === "pr_leads" ? "PR Leads" : "Active Leads"));
 
       if (targetRowNum) {
         const baseLead =
@@ -447,11 +439,7 @@ function DashboardContent() {
         toast.error("Invalid lead row index");
         return;
       }
-      const targetTabRange = tab === "internal_leads" 
-        ? "Internal Leads" 
-        : tab === "pr_leads" 
-        ? "PR Leads" 
-        : (row._sheet_tab || "Active Leads");
+      const targetTabRange = row._sheet_tab || (tab === "pr_leads" ? "PR Leads" : "Active Leads");
       const updatedRow = { ...row, Stage: newStage, "Lead Status": newStage };
 
       // Optimistic update in local state for instantaneous feedback
@@ -491,11 +479,7 @@ function DashboardContent() {
       } else if (col === "Lead") {
         updatedRow["Status"] = newValue;
       }
-      const targetTabRange = tab === "internal_leads" 
-        ? "Internal Leads" 
-        : tab === "pr_leads" 
-        ? "PR Leads" 
-        : (row._sheet_tab || "Active Leads");
+      const targetTabRange = row._sheet_tab || (tab === "pr_leads" ? "PR Leads" : "Active Leads");
 
       // Optimistic update in local state
       setSheetData((prev) => {
@@ -532,29 +516,94 @@ function DashboardContent() {
   const isTendersTab = tab === "tenders";
   const isInternalLeadsTab = tab === "internal_leads";
   const isPrLeadsTab = tab === "pr_leads";
+  const isOutboundTab = tab === "active_leads";
 
-  // Filter rows by tab (lead type) and selected month
-  const filteredRows = React.useMemo(() => {
-    if (!sheetData || !sheetData.rows) return [];
-    
-    const sourceColName = sheetData.headers.find(h => {
+  // Lead Source classification from config (defaults to ["LinkedIn"] as Outbound, others as Inbound)
+  const outboundSources = React.useMemo(() => {
+    const list = summary?.outbound_sources && summary.outbound_sources.length > 0
+      ? summary.outbound_sources
+      : ["LinkedIn"];
+    return list.map(s => s.trim().toLowerCase());
+  }, [summary?.outbound_sources]);
+
+  const sourceColName = React.useMemo(() => {
+    return sheetData?.headers.find(h => {
       const hl = h.toLowerCase().trim();
       return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
     }) || "Source";
+  }, [sheetData?.headers]);
 
-    const isRowTender = (row: Record<string, any>) => {
-      const val = String(row[sourceColName] || "").trim().toLowerCase();
-      if (val === "tender") return true;
+  const getLeadSource = React.useCallback((row: Record<string, any>): string => {
+    let val = String(row[sourceColName] || "").trim();
+    if (!val) {
       for (const [k, v] of Object.entries(row)) {
         const kl = k.toLowerCase().trim();
-        if ((kl === "source" || kl === "sources" || kl.includes("source") || kl.includes("lead source")) && String(v || "").trim().toLowerCase() === "tender") {
-          return true;
+        if ((kl === "source" || kl === "sources" || kl.includes("source") || kl.includes("lead source")) && String(v || "").trim()) {
+          val = String(v).trim();
+          break;
         }
       }
-      return false;
-    };
+    }
+    return val;
+  }, [sourceColName]);
 
-    let rows = sheetData.rows;
+  const isRowTender = React.useCallback((row: Record<string, any>) => {
+    const val = getLeadSource(row).toLowerCase();
+    if (val === "tender") return true;
+    for (const [k, v] of Object.entries(row)) {
+      const kl = k.toLowerCase().trim();
+      if ((kl === "source" || kl === "sources" || kl.includes("source") || kl.includes("lead source")) && String(v || "").trim().toLowerCase() === "tender") {
+        return true;
+      }
+    }
+    return false;
+  }, [getLeadSource]);
+
+  const isRowOutbound = React.useCallback((row: Record<string, any>) => {
+    if (isRowTender(row)) return false;
+    let src = getLeadSource(row).toLowerCase();
+    if (src === "linkediin") src = "linkedin";
+    return outboundSources.includes(src);
+  }, [isRowTender, getLeadSource, outboundSources]);
+
+  const isRowInbound = React.useCallback((row: Record<string, any>) => {
+    if (isRowTender(row)) return false;
+    let src = getLeadSource(row).toLowerCase();
+    if (src === "linkediin") src = "linkedin";
+    return !outboundSources.includes(src);
+  }, [isRowTender, getLeadSource, outboundSources]);
+
+  const isRowPr = React.useCallback((row: Record<string, any>) => {
+    if (isRowTender(row)) return false;
+    const src = getLeadSource(row).toLowerCase();
+    if (src === "pr") return true;
+    return row._sheet_tab === "PR Leads";
+  }, [isRowTender, getLeadSource]);
+
+  // Combined lead rows across Active Leads and Internal Leads to ensure no leads are lost
+  const allLeadsRows = React.useMemo(() => {
+    const seen = new Set<string>();
+    const list: Record<string, any>[] = [];
+    const append = (rows?: Record<string, any>[]) => {
+      if (!rows) return;
+      for (const r of rows) {
+        const key = `${r._sheet_tab || ''}_${r._row_num || ''}_${r['Lead ID'] || r['No.'] || r['Company'] || ''}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push(r);
+        }
+      }
+    };
+    append(sheetData?.rows);
+    append(internalLeadsData?.rows);
+    return list;
+  }, [sheetData?.rows, internalLeadsData?.rows]);
+
+  // Filter rows by tab (lead type) and selected month
+  const filteredRows = React.useMemo(() => {
+    if (!sheetData) return [];
+
+    let rows = allLeadsRows;
 
     // By default, strictly filter out hidden / collapsed rows from Google Sheets (archive)
     if (!includeArchived) {
@@ -564,12 +613,18 @@ function DashboardContent() {
     if (isTendersTab) {
       // Tender Section: strictly rows where Source is 'Tender'
       rows = rows.filter(row => isRowTender(row));
-    } else if (isInternalLeadsTab || isPrLeadsTab) {
-      // Internal Leads / PR Leads Section: fetched directly from primary sheet tab
-      rows = rows;
+    } else if (isPrLeadsTab) {
+      // PR Leads Section
+      rows = (prLeadsData?.rows || []).filter(row => includeArchived || !row._is_hidden);
+      if (rows.length === 0) {
+        rows = allLeadsRows.filter(row => isRowPr(row));
+      }
+    } else if (isInternalLeadsTab) {
+      // Inbound Section: strictly rows where Source is classified as Inbound (e.g. Website, Referral, Direct, etc.)
+      rows = rows.filter(row => isRowInbound(row));
     } else {
-      // Active Leads Section: strictly exclude any row where Source is 'Tender' so they appear in Tender ONLY
-      rows = rows.filter(row => !isRowTender(row));
+      // Outbound (Active Leads) Section: strictly rows where Source is classified as Outbound (e.g. LinkedIn)
+      rows = rows.filter(row => isRowOutbound(row));
     }
 
     let finalRows = rows;
@@ -594,7 +649,7 @@ function DashboardContent() {
     }
 
     return finalRows;
-  }, [sheetData, activeDateRange, dateCol, isTendersTab, isInternalLeadsTab, includeArchived]);
+  }, [sheetData, allLeadsRows, prLeadsData, isTendersTab, isPrLeadsTab, isInternalLeadsTab, isRowTender, isRowPr, isRowInbound, isRowOutbound, includeArchived, activeDateRange, dateCol]);
 
   const filteredSheetData = React.useMemo<SheetData | null>(() => {
     if (!sheetData) return null;
@@ -606,23 +661,10 @@ function DashboardContent() {
 
   // Active Leads non-tender sheet data slice (used by Proposal Tracker & Follow-Ups to exclude Tenders)
   const activeLeadsSheetData = React.useMemo<SheetData | null>(() => {
-    if (!sheetData || !sheetData.rows) return null;
-    const sourceColName = sheetData.headers.find(h => {
-      const hl = h.toLowerCase().trim();
-      return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
-    }) || "Source";
-
-    const nonTenders = sheetData.rows.filter(row => {
+    if (!sheetData) return null;
+    const nonTenders = allLeadsRows.filter(row => {
       if (!includeArchived && row._is_hidden) return false;
-      const val = String(row[sourceColName] || "").trim().toLowerCase();
-      if (val === "tender") return false;
-      for (const [k, v] of Object.entries(row)) {
-        const kl = k.toLowerCase().trim();
-        if ((kl === "source" || kl === "sources" || kl.includes("source") || kl.includes("lead source")) && String(v || "").trim().toLowerCase() === "tender") {
-          return false;
-        }
-      }
-      return true;
+      return !isRowTender(row);
     });
 
     return {
@@ -630,13 +672,11 @@ function DashboardContent() {
       rows: nonTenders,
       total: nonTenders.length
     };
-  }, [sheetData, includeArchived]);
+  }, [sheetData, allLeadsRows, includeArchived, isRowTender]);
 
-  // Source breakdown for the Dashboard cards: Inbound (Internal Leads), Outbound (Active Leads),
-  // PR (PR Leads), Govt (Tenders within Active Leads)
+  // Source breakdown for the Dashboard cards: Inbound, Outbound, PR, Govt
   const sourceBreakdown = React.useMemo(() => {
     const outboundDateCol = sheetData?.headers.find(h => h.toLowerCase().includes("date")) || "";
-    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
     const prDateCol = prLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
 
     const inRange = (row: Record<string, any>, col: string) => {
@@ -645,33 +685,23 @@ function DashboardContent() {
       return !!d && d >= activeDateRange.start && d <= activeDateRange.end;
     };
 
-    const countVisible = (data: SheetData | null, dateColForData: string) => {
-      if (!data || !data.rows) return 0;
-      return data.rows.filter(row => (includeArchived || !row._is_hidden) && inRange(row, dateColForData)).length;
-    };
+    const visibleAll = allLeadsRows.filter(row => {
+      if (!includeArchived && row._is_hidden) return false;
+      return inRange(row, outboundDateCol);
+    });
 
-    const sourceColName = sheetData?.headers.find(h => {
-      const hl = h.toLowerCase().trim();
-      return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
-    }) || "Source";
-
-    const tenderCount = sheetData?.rows
-      ? sheetData.rows.filter(row => {
-          if (!includeArchived && row._is_hidden) return false;
-          if (!inRange(row, outboundDateCol)) return false;
-          return String(row[sourceColName] || "").trim().toLowerCase() === "tender";
-        }).length
-      : 0;
-
-    const outboundCount = (activeLeadsSheetData?.rows || []).filter(row => inRange(row, outboundDateCol)).length;
+    const outboundCount = visibleAll.filter(row => isRowOutbound(row)).length;
+    const inboundCount = visibleAll.filter(row => isRowInbound(row)).length;
+    const govtCount = visibleAll.filter(row => isRowTender(row)).length;
+    const prCount = (prLeadsData?.rows || []).filter(row => (includeArchived || !row._is_hidden) && inRange(row, prDateCol)).length;
 
     return {
       outbound: outboundCount,
-      inbound: countVisible(internalLeadsData, inboundDateCol),
-      pr: countVisible(prLeadsData, prDateCol),
-      govt: tenderCount,
+      inbound: inboundCount,
+      pr: prCount,
+      govt: govtCount,
     };
-  }, [sheetData, activeLeadsSheetData, internalLeadsData, prLeadsData, includeArchived, activeDateRange]);
+  }, [allLeadsRows, prLeadsData, sheetData?.headers, includeArchived, activeDateRange, isRowOutbound, isRowInbound, isRowTender]);
 
   // Combined revenue data for the Dashboard tab's Revenue Analysis widget:
   // Active Leads (Outbound + Govt/Tender) + Internal Leads (Inbound) + PR Leads (PR), all summed together
@@ -746,25 +776,17 @@ function DashboardContent() {
   const leadsTrendData = React.useMemo(() => {
     const months = getRangeMonths(leadsTrendMonths);
 
-    const outboundRows = (activeLeadsSheetData?.rows || []).filter(r => includeArchived || !r._is_hidden);
-    const inboundRows = (internalLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+    const outboundRows = allLeadsRows.filter(r => (includeArchived || !r._is_hidden) && isRowOutbound(r));
+    const inboundRows = allLeadsRows.filter(r => (includeArchived || !r._is_hidden) && isRowInbound(r));
     const prRows = (prLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
-
-    const sourceColName = sheetData?.headers.find(h => {
-      const hl = h.toLowerCase().trim();
-      return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
-    }) || "Source";
-    const govtRows = (sheetData?.rows || []).filter(row => {
-      if (!includeArchived && row._is_hidden) return false;
-      return String(row[sourceColName] || "").trim().toLowerCase() === "tender";
-    });
+    const govtRows = allLeadsRows.filter(r => (includeArchived || !r._is_hidden) && isRowTender(r));
 
     const outboundDateCol = sheetData?.headers.find(h => h.toLowerCase().includes("date")) || "";
-    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || outboundDateCol;
     const prDateCol = prLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
 
     const outboundRevenueCol = findRevenueHeader(sheetData?.headers);
-    const inboundRevenueCol = findRevenueHeader(internalLeadsData?.headers);
+    const inboundRevenueCol = findRevenueHeader(internalLeadsData?.headers) || outboundRevenueCol;
     const prRevenueCol = findRevenueHeader(prLeadsData?.headers);
 
     const sumRevenueForMonth = (rows: Record<string, any>[], dateCol: string, revenueCol: string, m: { year: number; month: number }) => {
@@ -783,27 +805,19 @@ function DashboardContent() {
       PR: sumRevenueForMonth(prRows, prDateCol, prRevenueCol, m),
       Government: sumRevenueForMonth(govtRows, outboundDateCol, outboundRevenueCol, m),
     }));
-  }, [activeLeadsSheetData, internalLeadsData, prLeadsData, sheetData, includeArchived, leadsTrendMonths]);
+  }, [allLeadsRows, prLeadsData, sheetData?.headers, internalLeadsData?.headers, includeArchived, leadsTrendMonths, isRowOutbound, isRowInbound, isRowTender]);
 
   // Dashboard "Lead by Channel": month-wise lead counts for Inbound / Outbound / PR / Government
   const leadsByChannelData = React.useMemo(() => {
     const months = getRangeMonths(leadsByChannelMonths);
 
-    const outboundRows = (activeLeadsSheetData?.rows || []).filter(r => includeArchived || !r._is_hidden);
-    const inboundRows = (internalLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
+    const outboundRows = allLeadsRows.filter(r => (includeArchived || !r._is_hidden) && isRowOutbound(r));
+    const inboundRows = allLeadsRows.filter(r => (includeArchived || !r._is_hidden) && isRowInbound(r));
     const prRows = (prLeadsData?.rows || []).filter(r => includeArchived || !r._is_hidden);
-
-    const sourceColName = sheetData?.headers.find(h => {
-      const hl = h.toLowerCase().trim();
-      return hl === "source" || hl === "sources" || hl.includes("source") || hl.includes("lead source");
-    }) || "Source";
-    const govtRows = (sheetData?.rows || []).filter(row => {
-      if (!includeArchived && row._is_hidden) return false;
-      return String(row[sourceColName] || "").trim().toLowerCase() === "tender";
-    });
+    const govtRows = allLeadsRows.filter(r => (includeArchived || !r._is_hidden) && isRowTender(r));
 
     const outboundDateCol = sheetData?.headers.find(h => h.toLowerCase().includes("date")) || "";
-    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
+    const inboundDateCol = internalLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || outboundDateCol;
     const prDateCol = prLeadsData?.headers.find(h => h.toLowerCase().includes("date")) || "";
 
     const countForMonth = (rows: Record<string, any>[], col: string, m: { year: number; month: number }) => {
@@ -821,7 +835,7 @@ function DashboardContent() {
       PR: countForMonth(prRows, prDateCol, m),
       Government: countForMonth(govtRows, outboundDateCol, m),
     }));
-  }, [activeLeadsSheetData, internalLeadsData, prLeadsData, sheetData, includeArchived, leadsByChannelMonths]);
+  }, [allLeadsRows, prLeadsData, sheetData?.headers, internalLeadsData?.headers, includeArchived, leadsByChannelMonths, isRowOutbound, isRowInbound, isRowTender]);
 
   // Calculate display KPIs dynamically based on filtered rows (strictly 4 tabs: Total Leads, Active Leads, Closed Won, Closed Lost)
   const displayKpis = React.useMemo(() => {

@@ -176,6 +176,13 @@ const getRowVal = (row: Record<string, any>, colName: string): any => {
   }
   if (colName === "Company" && row["Company Name"]) return row["Company Name"];
   if (colName === "Company Name" && row["Company"]) return row["Company"];
+  if (colName === "Tender ID" && (row["Tender ID"] || row["Lead ID"])) return row["Tender ID"] || row["Lead ID"];
+  if (colName === "Client" && (row["Client"] || row["Organization"] || row["Company"])) return row["Client"] || row["Organization"] || row["Company"];
+  if (colName === "Date of Entry" && (row["Date of Entry"] || row["Publish Date"] || row["Date"])) return row["Date of Entry"] || row["Publish Date"] || row["Date"];
+  if (colName === "Tender Name" && (row["Tender Name"] || row["Requirement"])) return row["Tender Name"] || row["Requirement"];
+  if (colName === "Tender Value" && (row["Tender Value"] || row["Value"] || row["Revenue Estimations"])) return row["Tender Value"] || row["Value"] || row["Revenue Estimations"];
+  if (colName === "Submission Date" && (row["Submission Date"] || row["Last Submission Date"] || row["Deadline"])) return row["Submission Date"] || row["Last Submission Date"] || row["Deadline"];
+  if (colName === "Bid Opening Date" && (row["Bid Opening Date"] || row["Follow up date"])) return row["Bid Opening Date"] || row["Follow up date"];
   if (colName === "Status" || colName === "Lead") {
     if (row["Status"] && String(row["Status"]).trim()) return row["Status"];
     if (row["Lead"] && String(row["Lead"]).trim()) return row["Lead"];
@@ -349,20 +356,19 @@ export default function CRMTable({
     // Date, Company Name, Requirement, Source, Stage, Status, Cog POC
     activeCols = ["Date", "Company", "Requirement", "Source", "Stage", "Status", "Cog POC"];
   } else if (isTenderDashboard) {
-    // For Tender Dashboard, remove specific columns
-    activeCols = activeCols.filter(col => {
-      const colLower = col.toLowerCase().trim();
-      if (
-        colLower === "source" || 
-        colLower === "sources" || 
-        colLower.includes("poc email") ||
-        colLower === "email" ||
-        colLower.includes("message from prospect")
-      ) {
-        return false;
-      }
-      return true;
-    });
+    // For Tender Dashboard (Government tab), strictly display the 10 requested columns
+    activeCols = [
+      "Tender ID",
+      "Client",
+      "Date of Entry",
+      "Tender Name",
+      "Category",
+      "Tender Value",
+      "Submission Date",
+      "Bid Opening Date",
+      "Stage",
+      "Status",
+    ];
   }
 
   // Sorting logic

@@ -10,7 +10,8 @@ DEFAULT_CONFIG = {
     "column_order": [],
     "graphs": [],                # [{ id, type, x_col, y_col, title }]
     "report_recipients": [],     # List of emails to receive daily summary at 11:30 am
-    "mandatory_columns": []      # List of column names that are mandatory in lead forms
+    "mandatory_columns": [],     # List of column names that are mandatory in lead forms
+    "outbound_sources": ["LinkedIn"] # List of lead sources classified as Outbound (others are Inbound)
 }
 
 def _path(): return settings.config_store_path
